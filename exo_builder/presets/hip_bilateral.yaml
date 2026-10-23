@@ -6,4 +6,4 @@ segments:
   thigh:
     mass: 1.0
     cuffs:
-      - {name: thigh_cuff, at: 0.55, width: 0.08}
+      - {name: thigh_cuff, along_segment: 0.55, width: 0.08}

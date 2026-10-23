@@ -34,7 +34,7 @@ def test_misalignment_zero_at_default_loaded_in_flexion(model_path):
 
 
 def test_nonlinear_cuff_matches_linear_for_small_deflection(model_path):
-    nl = dict(HIP_ONLY, cuff_defaults={"model": "nonlinear", "cubic": {"ap": 1e6, "axial": 0, "ml": 0}})
+    nl = dict(HIP_ONLY, cuff_defaults={"model": "nonlinear", "stiffness_cubic": {"anteroposterior": 1e6, "longitudinal": 0, "mediolateral": 0}})
     out = {}
     for tag, cfg in (("lin", HIP_ONLY), ("nl", nl)):
         model, _ = build_exo(model_path, cfg)

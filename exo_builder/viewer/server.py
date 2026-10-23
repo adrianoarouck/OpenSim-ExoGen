@@ -29,6 +29,20 @@ from ..kinematics import ExoFitter, exo_coordinates, fit_exo_to_motion
 from .vtp import read_vtp
 
 STATIC = Path(__file__).parent / "static"
+
+# Named human poses (degrees). Both sides get the same values; pelvis_ty is set
+# afterwards so the lowest contact sphere touches the floor ("feet on the floor").
+# Sign conventions of the Rajagopal-type model: pelvis_tilt < 0 leans the trunk
+# forward, ankle_angle > 0 is dorsiflexion; feet stay flat when
+# ankle = knee - hip - pelvis_tilt.
+POSES = {
+    "em_pe": {},
+    "sentado": {"pelvis_tilt": 0, "hip_flexion": 90, "knee_angle": 90, "ankle_angle": 0},
+    "agachamento": {"pelvis_tilt": -20, "hip_flexion": 105, "knee_angle": 105, "ankle_angle": 20},
+    "meio_agachamento": {"pelvis_tilt": -10, "hip_flexion": 60, "knee_angle": 70, "ankle_angle": 20},
+    "subindo_degrau": {"hip_flexion_r": 60, "knee_angle_r": 75, "ankle_angle_r": 15,
+                       "hip_flexion_l": -5, "knee_angle_l": 5, "ankle_angle_l": 0},
+}
 GEOMS = {
     "Mesh": lambda g: {"type": "mesh", "file": osim.Mesh.safeDownCast(g).get_mesh_file()},
     "Cylinder": lambda g: {"type": "cylinder", "radius": osim.Cylinder.safeDownCast(g).get_radius(),
@@ -69,6 +83,7 @@ class Session:
         self.mesh_cache = {}
         self.pose_deg = {}
         self.autofit = True
+        self.ground_feet = True
         self.cfg = C.load_config(cfg)
         self.build(self.cfg)
 
@@ -122,7 +137,40 @@ class Session:
         self._update_dependent()
         if self.autofit:
             self.fitter.fit(self.state)
+        if self.ground_feet and cs.contains("pelvis_ty"):
+            self._put_feet_on_floor()
         self.model.realizeVelocity(self.state)
+
+    def _put_feet_on_floor(self):
+        """Shift pelvis_ty so the lowest contact sphere touches y = 0, then refit the exo."""
+        self.model.realizePosition(self.state)
+        lowest = np.inf
+        cgs = self.model.getContactGeometrySet()
+        for i in range(cgs.getSize()):
+            sph = osim.ContactSphere.safeDownCast(cgs.get(i))
+            if sph is not None:
+                y = sph.getFrame().findStationLocationInGround(self.state, sph.get_location()).get(1)
+                lowest = min(lowest, y - sph.getRadius())
+        if not np.isfinite(lowest) or abs(lowest) < 1e-5:
+            return
+        ty = self.model.getCoordinateSet().get("pelvis_ty")
+        ty.setValue(self.state, ty.getValue(self.state) - lowest, False)
+        self.pose_deg["pelvis_ty"] = ty.getValue(self.state)
+        if self.autofit:
+            self.fitter.fit(self.state)
+
+    def set_named_pose(self, name):
+        if name not in POSES:
+            raise ValueError(f"unknown pose {name!r}; options: {list(POSES)}")
+        self.pose_deg = {}
+        self.state = self.model.initSystem()
+        self.fitter = ExoFitter(self.model, self.state)
+        cs = self.model.getCoordinateSet()
+        for key, v in POSES[name].items():
+            names = [key] if cs.contains(key) else [f"{key}_{s}" for s in ("r", "l")]
+            for n in names:
+                if cs.contains(n):
+                    self.pose_deg[n] = v
 
     def _update_dependent(self):
         """Patella-like CoordinateCouplerConstraints (dependent = f(independent))."""
@@ -156,14 +204,18 @@ class Session:
             rec = fs.get(name).getRecordValues(s)
             f1 = osim.PhysicalFrame.safeDownCast(self.model.getComponent(
                 fs.get(name).getSocket("frame1").getConnecteePath()))
-            loads.append({"name": name, "origin": to_np(f1.getTransformInGround(s).p()).tolist(),
+            T1 = f1.getTransformInGround(s)
+            loads.append({"name": name, "origin": to_np(T1.p()).tolist(),
                           "force": [rec.get(i) for i in range(3)],
+                          # cuff axes in ground: anteroposterior, longitudinal, mediolateral
+                          "axes": rot_to_np(T1.R()).T.tolist(),
                           **{k: float(d[k]) for k in ("F_ap", "F_axial", "F_ml", "M_ap", "M_axial", "M_ml",
                                                       "F_lat", "F_total")}})
         exo = {n: float(np.degrees(self.model.getCoordinateSet().get(n).getValue(s))
                         if self.model.getCoordinateSet().get(n).getMotionType() == 1
                         else self.model.getCoordinateSet().get(n).getValue(s)) for n in sorted(self.exo_names)}
-        return {"transforms": transforms, "loads": loads, "exo_coordinates": exo}
+        return {"transforms": transforms, "loads": loads, "exo_coordinates": exo,
+                "coordinates": self.coordinates() if state is None else None}
 
     def motion(self, path, step):
         time, table, energy = fit_exo_to_motion(self.model, path, step=max(1, int(step)))
@@ -235,8 +287,8 @@ def make_handler(session):
             if url.path == "/api/meta":
                 return self._guard(lambda: {
                     "presets": C.list_presets(), "defaults": C.DEFAULTS, "dof_defaults": C.DOF_DEFAULTS,
-                    "enums": {"mode": C.FOOT_MODES, "model": C.COUPLING_MODELS + ("bushing",),
-                              "limits": C.LIMIT_MODES},
+                    "enums": {"mode": C.FOOT_MODES, "model": C.COUPLING_MODELS, "limits": C.LIMIT_MODES},
+                    "docs": C.PARAM_DOCS, "poses": list(POSES),
                     "model": session.human_path})
             if url.path == "/api/mesh":
                 name = parse_qs(url.query).get("file", [""])[0]
@@ -256,11 +308,13 @@ def make_handler(session):
                 return self._guard(run)
             if url.path == "/api/pose":
                 def run():
-                    session.pose_deg.update(body.get("pose", {}))
                     session.autofit = bool(body.get("autofit", session.autofit))
+                    session.ground_feet = bool(body.get("ground_feet", session.ground_feet))
+                    if body.get("named"):
+                        session.set_named_pose(body["named"])
+                    session.pose_deg.update(body.get("pose", {}))
                     if body.get("reset"):
-                        session.pose_deg = {}
-                        session.state = session.model.initSystem()
+                        session.set_named_pose("em_pe")
                     session.apply_pose()
                     return session.pose()
                 return self._guard(run)

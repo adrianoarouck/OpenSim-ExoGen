@@ -117,19 +117,67 @@ function applyPose(pose) {
   fillExoCoords(pose.exo_coordinates);
 }
 
+// Arrow whose TIP touches the cuff centre (the force is applied there), drawn on
+// top of the meshes so it is never hidden inside the limb.
+function forceArrow(origin, vec, color, scale) {
+  const mag = vec.length();
+  const len = Math.max(mag * scale, 0.025);
+  const dir = vec.clone().normalize();
+  const tail = origin.clone().addScaledVector(dir, -len);
+  const a = new THREE.ArrowHelper(dir, tail, len, color, Math.min(0.04, 0.35 * len), Math.min(0.025, 0.2 * len));
+  a.traverse((o) => { if (o.material) { o.material.depthTest = false; o.material.transparent = true; } o.renderOrder = 10; });
+  return a;
+}
+
+function label(text, pos, color = "#111") {
+  const c = document.createElement("canvas");
+  const ctx = c.getContext("2d");
+  ctx.font = "bold 28px system-ui";
+  c.width = ctx.measureText(text).width + 16; c.height = 40;
+  ctx.font = "bold 28px system-ui";
+  ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.fillStyle = color; ctx.fillText(text, 8, 29);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false }));
+  sp.scale.set(c.width / c.height * 0.035, 0.035, 1);
+  sp.position.copy(pos);
+  sp.renderOrder = 11;
+  return sp;
+}
+
+const AXIS_COLORS = [0xe5484d, 0x30a46c, 0x3e63dd];  // AP, longitudinal, ML
 function drawArrows(loads) {
   arrows.clear();
+  const mode = $("arrowMode").value, sign = $("arrowBody").value === "exo" ? -1 : 1;
+  updateLegend(mode, sign);
   if (!$("showArrows").checked) return;
   const scale = parseFloat($("arrowScale").value);
   for (const l of loads) {
-    const f = new THREE.Vector3(...l.force);
+    const origin = new THREE.Vector3(...l.origin);
+    const f = new THREE.Vector3(...l.force).multiplyScalar(sign);
     const mag = f.length();
     if (mag < 0.5) continue;
-    const t = Math.min(mag / 300, 1);
-    const color = new THREE.Color().setHSL(0.33 * (1 - t), 0.85, 0.5);
-    arrows.add(new THREE.ArrowHelper(f.clone().normalize(), new THREE.Vector3(...l.origin),
-      Math.max(mag * scale, 0.02), color, 0.025, 0.015));
+    if (mode === "resultant") {
+      const t = Math.min(mag / 300, 1);
+      const color = new THREE.Color().setHSL(0.33 * (1 - t), 0.85, 0.45);
+      arrows.add(forceArrow(origin, f, color, scale));
+      const tail = origin.clone().addScaledVector(f.clone().normalize(), -Math.max(mag * scale, 0.025) - 0.03);
+      arrows.add(label(`${mag.toFixed(0)} N`, tail, "#" + color.getHexString()));
+    } else {
+      l.axes.forEach((axis, i) => {
+        const comp = f.dot(new THREE.Vector3(...axis));
+        if (Math.abs(comp) < 0.5) return;
+        arrows.add(forceArrow(origin, new THREE.Vector3(...axis).multiplyScalar(comp), AXIS_COLORS[i], scale));
+      });
+    }
   }
+}
+
+function updateLegend(mode, sign) {
+  const who = sign > 0 ? "do exo <b>sobre o humano</b>" : "do humano <b>sobre o exo</b> (reação)";
+  $("legend").innerHTML = mode === "resultant"
+    ? `Seta = força ${who}; a ponta está no centro do cuff, onde a força é aplicada. Cor: verde (pequena) → vermelho (≥ 300 N).`
+    : `Componentes da força ${who} nos eixos do cuff: <i style="background:#e5484d"></i>anteroposterior
+       <i style="background:#30a46c"></i>longitudinal <i style="background:#3e63dd"></i>mediolateral.`;
 }
 
 $("showHuman").onchange = () => root.traverse((o) => { if (o.isMesh && !o.userData.exo) o.visible = $("showHuman").checked; });
@@ -140,6 +188,8 @@ $("humanOpacity").oninput = () => root.traverse((o) => {
   }
 });
 $("showArrows").onchange = () => drawArrows(currentLoads());
+$("arrowMode").onchange = () => drawArrows(currentLoads());
+$("arrowBody").onchange = () => drawArrows(currentLoads());
 $("arrowScale").oninput = () => drawArrows(currentLoads());
 let lastLoads = [];
 function currentLoads() { return lastLoads; }
@@ -150,7 +200,9 @@ function fillLoadsTable(loads) {
   lastLoads = loads;
   const rows = loads.map((l) => `<tr><td>${l.name}</td><td>${fmt(l.F_ap)}</td><td>${fmt(l.F_axial)}</td>
     <td>${fmt(l.F_ml)}</td><td>${fmt(l.F_total)}</td><td>${fmt(l.M_axial, 2)}</td></tr>`).join("");
-  $("loadsTable").innerHTML = `<tr><th>acoplamento</th><th>F_ap</th><th>F_axial</th><th>F_ml</th><th>|F| N</th><th>M_ax</th></tr>${rows}`;
+  $("loadsTable").innerHTML = `<tr><th>acoplamento</th><th title="anteroposterior, + frente">F_AP [N]</th>
+    <th title="longitudinal, + em direção à junta proximal">F_long [N]</th><th title="mediolateral, + direita">F_ML [N]</th>
+    <th>|F| [N]</th><th title="torção em torno do eixo do membro">M_long [N·m]</th></tr>${rows}`;
 }
 function fillExoCoords(exo) {
   $("exoCoords").innerHTML = Object.entries(exo).map(([k, v]) => `<tr><td>${k}</td><td>${v.toFixed(2)}</td></tr>`).join("");
@@ -190,12 +242,25 @@ function input(type, value, onChange, attrs = {}) {
 const toHex = (c) => "#" + c.map((x) => Math.round(x * 255).toString(16).padStart(2, "0")).join("");
 const fromHex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
 
-function field(label, el) {
+function helpIcon(key) {
+  const doc = state.meta.docs[key];
+  if (!doc) return null;
+  const h = document.createElement("span");
+  h.className = "help";
+  h.textContent = "?";
+  h.title = (doc[0] ? `[${doc[0]}] ` : "") + doc[1];
+  return h;
+}
+function field(key, el) {
   const row = document.createElement("div");
   row.className = "field";
   const l = document.createElement("label");
-  l.textContent = label;
-  l.title = label;
+  l.textContent = key;
+  const doc = state.meta.docs[key];
+  if (doc && doc[0]) { const u = document.createElement("span"); u.className = "unit"; u.textContent = `[${doc[0]}]`; l.append(u); }
+  const h = helpIcon(key);
+  if (h) l.append(h);
+  l.title = doc ? doc[1] : key;
   row.append(l, el);
   return row;
 }
@@ -228,7 +293,7 @@ function renderValue(obj, key, path) {
     if (key === "axis") return field(key, input("text", v, (nv) => set(parseAxis(nv))));
     return field(key, input("text", v, set));
   }
-  if (Array.isArray(v) && v.every((x) => typeof x === "number")) {
+  if (Array.isArray(v) && key !== "cuffs" && v.length && v.every((x) => typeof x === "number")) {
     if (key.startsWith("color")) return field(key, input("color", toHex(v), (h) => set(fromHex(h))));
     const box = document.createElement("div");
     box.className = "vec";
@@ -255,6 +320,12 @@ function renderObject(obj, title, path, open = false) {
   d.open = open;
   const s = document.createElement("summary");
   s.textContent = title;
+  const doc = state.meta.docs[title];
+  if (doc) {
+    s.title = doc[1];
+    if (doc[0]) s.append(Object.assign(document.createElement("span"), { className: "unit", textContent: ` [${doc[0]}]` }));
+    s.append(helpIcon(title));
+  }
   d.append(s);
   for (const k of Object.keys(obj)) d.append(renderValue(obj, k, path ? `${path}.${k}` : k));
   return d;
@@ -265,6 +336,7 @@ function renderList(obj, key, path) {
   d.open = true;
   const s = document.createElement("summary");
   s.textContent = `${key} (${obj[key].length})`;
+  if (helpIcon(key)) s.append(helpIcon(key));
   d.append(s);
   obj[key].forEach((item, i) => {
     const sub = renderObject(item, item.name || `${key}[${i}]`, `${path}[${i}]`, true);
@@ -281,7 +353,8 @@ function renderList(obj, key, path) {
   add.textContent = `+ adicionar ${key === "cuffs" ? "cuff" : "item"}`;
   add.onclick = () => {
     const last = obj[key][obj[key].length - 1];
-    const item = last ? JSON.parse(JSON.stringify(last)) : { name: `${path.split(".")[1] || "seg"}_cuff`, at: 0.5, width: 0.07 };
+    const item = last ? JSON.parse(JSON.stringify(last))
+      : { name: `${path.split(".")[1] || "seg"}_cuff`, along_segment: 0.5, width: 0.07 };
     item.name = `${item.name || "cuff"}_${obj[key].length + 1}`;
     obj[key].push(item);
     renderForm();
@@ -336,8 +409,16 @@ let poseBusy = false, posePending = null;
 async function sendPose(body) {
   if (poseBusy) { posePending = { ...(posePending || {}), ...body, pose: { ...(posePending?.pose || {}), ...(body.pose || {}) } }; return; }
   poseBusy = true;
-  try { applyPose(await api("/api/pose", { autofit: $("autofit").checked, ...body })); showError(null); }
-  catch (e) { showError(e); }
+  try {
+    const pose = await api("/api/pose", { autofit: $("autofit").checked, ground_feet: $("groundFeet").checked, ...body });
+    applyPose(pose);
+    if (body.named || body.reset) {
+      renderSliders(pose.coordinates);
+      const pelvis = state.frames["/bodyset/pelvis"];
+      if (pelvis) controls.target.set(pelvis.position.x, pelvis.position.y - 0.25, pelvis.position.z);
+    }
+    showError(null);
+  } catch (e) { showError(e); }
   poseBusy = false;
   if (posePending) { const p = posePending; posePending = null; sendPose(p); }
 }
@@ -359,7 +440,10 @@ function renderSliders(coords) {
   }
 }
 $("autofit").onchange = () => sendPose({});
-$("resetPose").onclick = async () => { await sendPose({ reset: true }); renderSliders((await api("/api/scene")).coordinates); };
+$("groundFeet").onchange = () => sendPose({});
+const POSE_LABELS = { em_pe: "Em pé", sentado: "Sentado", agachamento: "Agachamento",
+  meio_agachamento: "Meio agachamento", subindo_degrau: "Subindo degrau (perna direita)" };
+$("applyPose").onclick = () => sendPose({ named: $("namedPose").value });
 
 // ------------------------------------------------------------------ motion
 $("loadMotion").onclick = async () => {
@@ -451,6 +535,7 @@ document.querySelectorAll("#tabs button").forEach((b) => b.onclick = () => {
   try {
     state.meta = await api("/api/meta");
     for (const p of state.meta.presets) $("preset").add(new Option(p, p));
+    for (const p of state.meta.poses) $("namedPose").add(new Option(POSE_LABELS[p] || p, p));
     const scene = await api("/api/scene");
     state.config = scene.config;
     $("preset").value = state.config.name;

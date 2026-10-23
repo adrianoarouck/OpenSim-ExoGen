@@ -3,7 +3,7 @@
 Every coupling is a pair of PhysicalOffsetFrames that coincide at the default
 pose (zero preload): ``<name>_human`` on the human body (frame1) and
 ``<name>_exo`` on the exo body (frame2). Frame axes: X = anterior (ap),
-Y = along the segment / up (axial), Z = X x Y (ml, points right).
+Y = along the segment / up (longitudinal), Z = X x Y (mediolateral, points right).
 
 Notes from probing the OpenSim 4.5/4.6 Python API (see tests/test_api_contract.py):
 * BushingForce has no calcStiffnessForce/calcDampingForce in Python; read the
@@ -16,7 +16,7 @@ import opensim as osim
 
 from .geometry import offset_frame, vec3
 
-AXES = ("ap", "axial", "ml")
+AXES = ("anteroposterior", "longitudinal", "mediolateral")  # coupling frame X, Y, Z
 SSHSF_PROPS = ("stiffness", "dissipation", "static_friction", "dynamic_friction", "viscous_friction",
                "transition_velocity", "constant_contact_force", "hertz_smoothing", "hunt_crossley_smoothing")
 
@@ -47,21 +47,21 @@ def make_coupling(name, f_h, f_e, spec):
         return wc
     if model in ("linear", "bushing"):
         return osim.BushingForce(name, f_h, f_e,
-                                 _v(spec["translational"]), _v(spec["rotational"]),
-                                 _v(spec["translational_damping"]), _v(spec["rotational_damping"]))
+                                 _v(spec["stiffness_translational"]), _v(spec["stiffness_rotational"]),
+                                 _v(spec["damping_translational"]), _v(spec["damping_rotational"]))
     if model == "nonlinear":
         f = osim.ExpressionBasedBushingForce(name, f_h, f_e)
-        cubic = spec.get("cubic", {})
+        cubic = spec.get("stiffness_cubic", {})
         for ax, key, var in zip(AXES, ("Fx", "Fy", "Fz"), ("delta_x", "delta_y", "delta_z")):
-            k1, k3 = float(spec["translational"][ax]), float(cubic.get(ax, 0.0))
+            k1, k3 = float(spec["stiffness_translational"][ax]), float(cubic.get(ax, 0.0))
             expr = f"{k1}*{var}" + (f" + {k3}*{var}^3" if k3 else "")
             getattr(f, f"set{key}Expression")(expr)
         for ax, key, var in zip(AXES, ("Mx", "My", "Mz"), ("theta_x", "theta_y", "theta_z")):
-            getattr(f, f"set{key}Expression")(f"{float(spec['rotational'][ax])}*{var}")
+            getattr(f, f"set{key}Expression")(f"{float(spec['stiffness_rotational'][ax])}*{var}")
         for key, expr in (spec.get("expressions") or {}).items():
             getattr(f, f"set{key}Expression")(str(expr))
-        f.set_translational_damping(_v(spec["translational_damping"]))
-        f.set_rotational_damping(_v(spec["rotational_damping"]))
+        f.set_translational_damping(_v(spec["damping_translational"]))
+        f.set_rotational_damping(_v(spec["damping_rotational"]))
         return f
     raise ValueError(f"unknown coupling model {model!r}")
 

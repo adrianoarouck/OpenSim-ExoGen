@@ -20,9 +20,18 @@
       <label><input type="checkbox" id="showHuman" checked> humano</label>
       <label>opacidade <input type="range" id="humanOpacity" min="0.05" max="1" step="0.05" value="0.45"></label>
       <label><input type="checkbox" id="showArrows" checked> forças</label>
+      <select id="arrowMode" title="Como desenhar a força de cada acoplamento">
+        <option value="resultant">resultante</option>
+        <option value="components">componentes (AP / long. / ML)</option>
+      </select>
+      <select id="arrowBody" title="A força do exo sobre o humano é igual e oposta à do humano sobre o exo">
+        <option value="human">sobre o humano</option>
+        <option value="exo">sobre o exo (reação)</option>
+      </select>
       <label>escala <input type="range" id="arrowScale" min="0.0002" max="0.005" step="0.0002" value="0.001"></label>
       <span id="status" class="status">carregando…</span>
     </div>
+    <div id="legend"></div>
     <div id="error" hidden></div>
   </section>
   <aside id="panel">
@@ -50,9 +59,17 @@
     <div id="tab-exo" class="tab active"><div id="form"></div></div>
     <div id="tab-pose" class="tab">
       <div class="row">
-        <label><input type="checkbox" id="autofit" checked> ajustar exo automaticamente (mín. energia dos cuffs)</label>
+        <select id="namedPose"></select>
+        <button id="applyPose">Aplicar pose</button>
       </div>
-      <div class="row"><button id="resetPose">Zerar pose</button></div>
+      <div class="row">
+        <label><input type="checkbox" id="autofit" checked> ajustar exo automaticamente (mín. energia dos cuffs)
+          <span class="help" title="O exo vai para a pose em que as molas dos cuffs guardam a menor energia, como um exo sem massa e sem motor. Desligue para ver o exo parado enquanto o humano se move.">?</span></label>
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="groundFeet" checked> pés no chão
+          <span class="help" title="Ajusta a altura da pelve (pelvis_ty) para que o ponto de contato mais baixo do pé encoste no chão.">?</span></label>
+      </div>
       <div id="sliders"></div>
       <h3>Coordenadas do exo</h3>
       <table id="exoCoords" class="grid"></table>
@@ -71,11 +88,17 @@
       </div>
       <canvas id="loadPlot" width="380" height="200"></canvas>
       <div class="row"><select id="plotCoupling"></select><select id="plotComp">
-        <option>F_ap</option><option>F_ml</option><option>F_axial</option><option>F_total</option><option>M_axial</option>
+        <option value="F_ap">F anteroposterior [N]</option><option value="F_ml">F mediolateral [N]</option>
+        <option value="F_axial">F longitudinal [N]</option><option value="F_total">|F| [N]</option>
+        <option value="M_axial">M longitudinal [N·m]</option>
       </select></div>
     </div>
     <div id="tab-loads" class="tab">
-      <p class="hint">Força/momento que o exo aplica <b>no humano</b>, no frame do cuff: ap (+anterior), axial (+proximal), ml (+direita).</p>
+      <p class="hint">Cada acoplamento (cuff, cinto, amarração do pé) é uma mola-amortecedor 6-DOF entre um ponto no
+        membro e um ponto no exo, coincidentes na pose de referência. Quando o exo se desloca/gira em relação ao membro,
+        surge uma força <b>F = −K·deslocamento − B·velocidade</b> (e um momento), aplicada no centro do cuff: no humano
+        num sentido e no exo no sentido oposto. A tabela mostra o que o exo aplica <b>no humano</b>, nos eixos do cuff:
+        AP (+frente), longitudinal (+em direção à junta proximal), ML (+direita); M_long é a torção em torno do membro.</p>
       <table id="loadsTable" class="grid"></table>
     </div>
   </aside>

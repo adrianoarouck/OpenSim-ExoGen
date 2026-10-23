@@ -47,7 +47,21 @@ table.grid { width: 100%; border-collapse: collapse; font-variant-numeric: tabul
 table.grid th, table.grid td { border-bottom: 1px solid var(--line); padding: 2px 4px; text-align: right; }
 table.grid th:first-child, table.grid td:first-child { text-align: left; }
 #loadPlot { width: 100%; height: 200px; border: 1px solid var(--line); border-radius: 6px; margin-top: 6px; }
+#overlay select { max-width: 170px; }
 @media (max-width: 800px) {
   #app { grid-template-columns: 1fr; grid-template-rows: 55vh auto; height: auto; }
   #panel { border-left: none; border-top: 1px solid var(--line); }
+  #overlay { gap: 4px 8px; padding: 4px 6px; font-size: 11px; right: 8px; }
+  #overlay select { max-width: 120px; font-size: 11px; padding: 1px 3px; }
+  #overlay input[type=range] { width: 56px; }
+  #legend { display: none; }
 }
+.help { display: inline-block; width: 15px; height: 15px; line-height: 15px; text-align: center; border-radius: 50%;
+  background: var(--line); color: var(--text); font-size: 10px; font-weight: 700; cursor: help; margin-left: 4px; }
+.unit { color: var(--muted); font-size: 11px; margin-left: 3px; }
+#legend { position: absolute; left: 8px; bottom: 8px; max-width: 60%; font-size: 12px; line-height: 1.5;
+  background: color-mix(in srgb, var(--panel) 85%, transparent); padding: 6px 10px; border-radius: 8px;
+  border: 1px solid var(--line); }
+#legend:empty { display: none; }
+#legend i { display: inline-block; width: 18px; height: 4px; vertical-align: middle; margin-right: 4px; border-radius: 2px; }
+#error { bottom: auto; top: 56px; }

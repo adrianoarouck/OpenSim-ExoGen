@@ -6,5 +6,5 @@ segments:
   shank:
     mass: 0.7
     cuffs:
-      - {name: shank_cuff, at: 0.3, width: 0.07, translational: {ap: 5645, ml: 5645}, translational_damping: {ap: 418, ml: 418}}
+      - {name: shank_cuff, along_segment: 0.3, width: 0.07, stiffness_translational: {anteroposterior: 5645, mediolateral: 5645}, damping_translational: {anteroposterior: 418, mediolateral: 418}}
   foot: {mass: 0.5, mode: bushing}

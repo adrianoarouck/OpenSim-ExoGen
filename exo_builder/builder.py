@@ -212,8 +212,8 @@ class ExoBuilder:
         parts = [(spec["mass"] - cuff_mass, bar_c, rod_inertia(spec["mass"] - cuff_mass, length, spec["bar_radius"], axis))]
         h_prox, h_dist = human_jc[PROXIMAL_JOINT[seg]], human_jc[DISTAL_JOINT[seg]]
         for c in cuffs:
-            center = h_prox + c["at"] * (h_dist - h_prox)
-            r = self.L.limb_radius(view, side, seg, c["at"]) if c["radius"] == "auto" else c["radius"]
+            center = h_prox + c["along_segment"] * (h_dist - h_prox)
+            r = self.L.limb_radius(view, side, seg, c["along_segment"]) if c["radius"] == "auto" else c["radius"]
             parts.append((cuff_mass / len(cuffs), center, ring_inertia(cuff_mass / len(cuffs), r, c["width"], axis)))
         body = self._new_body(name, origin, parts, color)
         R_bar = frame_from_y(axis, self.L.anterior)
@@ -307,11 +307,11 @@ class ExoBuilder:
             act.setMaxControl(1.0)
             self.model.addForce(act)
             self.info["actuators"].append(act.getName())
-        if d["stiffness"] > 0 or d["damping"] > 0:
+        if d["passive_stiffness"] > 0 or d["passive_damping"] > 0:
             spring = osim.SpringGeneralizedForce(cname)
             spring.setName(f"passive_{cname}")
-            spring.setStiffness(float(d["stiffness"]))
-            spring.setViscosity(float(d["damping"]))
+            spring.setStiffness(float(d["passive_stiffness"]))
+            spring.setViscosity(float(d["passive_damping"]))
             spring.setRestLength(float(np.radians(d["default"])))
             self.model.addForce(spring)
         if d["limits"] == "soft":
@@ -329,12 +329,12 @@ class ExoBuilder:
         for i, raw in enumerate(view["segments"][seg].get("cuffs", [])):
             c = C.cuff_spec(view, raw)
             name = f"{c.get('name') or f'{seg}_cuff{i}'}_{side}"
-            center = prox + c["at"] * (dist - prox) + R_seg @ np.asarray(c["offset"], dtype=float)
+            center = prox + c["along_segment"] * (dist - prox) + R_seg @ np.asarray(c["offset"], dtype=float)
             add_coupling(self, name, "cuff", side, seg, human_body, body, center, R_seg, c)
-            r = self.L.limb_radius(view, side, seg, c["at"]) if c["radius"] == "auto" else c["radius"]
+            r = self.L.limb_radius(view, side, seg, c["along_segment"]) if c["radius"] == "auto" else c["radius"]
             self._geom(body, f"{name}_shell", osim.Cylinder(r + 0.004, c["width"] / 2), center, R_seg,
                        self.colors[body.getName()], opacity)
-            self.info["couplings"][-1].update({"at": c["at"], "radius": float(r), "width": c["width"]})
+            self.info["couplings"][-1].update({"along_segment": c["along_segment"], "radius": float(r), "width": c["width"]})
 
     def _foot_interaction(self, view, side, body, human_body):
         spec = view["segments"]["foot"]

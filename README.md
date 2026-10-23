@@ -57,9 +57,12 @@ segments:
   foot: {enabled: false}                    # remove o pé (e a junta do tornozelo)
   thigh:
     mass: 1.2
-    cuffs:                                  # quantos cuffs quiser, posição 0..1 ao longo do segmento
-      - {name: thigh_prox, at: 0.3, width: 0.06}
-      - {name: thigh_dist, at: 0.8, model: nonlinear, cubic: {ap: 2.0e6}}
+    cuffs:                                  # quantos cuffs quiser
+      - {name: thigh_prox, along_segment: 0.3, width: 0.06}     # 0 = quadril, 1 = joelho; largura em m
+      - name: thigh_dist
+        along_segment: 0.8
+        model: nonlinear
+        stiffness_cubic: {anteroposterior: 2.0e6}               # N/m³
 joints:
   knee:
     misalignment: [0.0, 0.02, 0.0]          # eixo do exo 2 cm acima do joelho anatômico
@@ -73,8 +76,8 @@ Regras da cadeia: `pelvis → thigh → shank → foot`. Juntas existem entre se
 habilitados consecutivos (quadril, joelho, tornozelo). Um segmento cujo pai está
 desabilitado vira **raiz flutuante** (junta 6-DOF ao ground), presa ao humano só
 pelos cuffs. DOFs: `enabled` (senão é travado), `actuated` (cria `tau_exo_*`, um
-`CoordinateActuator` com `optimal_force = max_torque`), `stiffness/damping`
-passivos, `limits: clamp | soft | none`. O eixo padrão (`axis: human`) é o da
+`CoordinateActuator` com `optimal_force = max_torque`), `passive_stiffness/passive_damping`
+(mola/amortecedor torsional na junta), `limits: clamp | soft | none`. O eixo padrão (`axis: human`) é o da
 coordenada humana correspondente, então ângulo positivo do exo = do humano.
 
 ## Interface humano–exo
@@ -86,12 +89,35 @@ um no humano (`<nome>_human`) e outro no exo (`<nome>_exo`), ligados por:
   (`F = k·d + cubic·d³`, ou expressões próprias em `delta_x..z`/`theta_x..z`);
 * `weld` → `WeldConstraint` (cinto ou pé rígidos).
 
-Eixos do frame do cuff: `ap` (anterior), `axial` (ao longo do segmento, proximal),
-`ml` (para a direita). Rigidez/amortecimento são dados por eixo. Valores padrão
-sagitais: coxa k = 3283 N/m, b = 367 N·s/m; canela k = 5645 N/m, b = 418 N·s/m
-([doi:10.1007/s11071-022-07876-8](https://doi.org/10.1007/s11071-022-07876-8)). Os
-demais (axial, ML, rotacionais, cinto, amarração do pé) são estimativas de
-engenharia — ajuste-os.
+Direções do frame do cuff (iguais para cuffs, `attach` do cinto e `binding` do pé):
+
+| Chave | Eixo | Sentido positivo |
+|---|---|---|
+| `anteroposterior` | X | para a frente |
+| `longitudinal` | Y | ao longo do segmento, em direção à junta proximal (para cima) |
+| `mediolateral` | Z | para a direita do corpo |
+
+Parâmetros de cada acoplamento (por direção):
+
+| Chave | Unidade | O que é |
+|---|---|---|
+| `stiffness_translational` | N/m | rigidez para o exo se deslocar em relação ao membro |
+| `stiffness_rotational` | N·m/rad | rigidez para o exo girar em relação ao membro (em torno de cada eixo) |
+| `damping_translational` | N·s/m | amortecimento da velocidade relativa |
+| `damping_rotational` | N·m·s/rad | amortecimento da velocidade angular relativa |
+| `stiffness_cubic` | N/m³ | só `nonlinear`: F = k·d + k3·d³ |
+
+Cuff: `along_segment` (0–1: 0 = junta proximal, 1 = distal), `width` (m), `radius`
+(m ou `auto`), `offset` (m, nas três direções). Todas as chaves com unidade e
+descrição estão em `PARAM_DOCS` (`exo_builder/config.py`), que também gera os “?”
+do visualizador. Arquivos com os nomes antigos (`at`, `ap/axial/ml`,
+`translational`, `cubic`, `stiffness/damping` das juntas) são convertidos
+automaticamente ao carregar.
+
+Valores padrão anteroposteriores: coxa k = 3283 N/m, b = 367 N·s/m; canela k = 5645 N/m,
+b = 418 N·s/m ([doi:10.1007/s11071-022-07876-8](https://doi.org/10.1007/s11071-022-07876-8)).
+Os demais (longitudinal, mediolateral, rotacionais, cinto, amarração do pé) são
+estimativas de engenharia — ajuste-os.
 
 Pé (`segments.foot.mode`): `weld` (legado), `bushing` (amarração; só o humano toca
 o chão) ou `plate_contact` (as esferas de contato do humano passam a empurrar um
@@ -100,9 +126,17 @@ os mesmos parâmetros).
 
 ### Forças de interação
 
+Como a força surge: cada acoplamento liga um ponto do membro a um ponto do exo, que
+coincidem na pose de referência. Quando o exo se desloca ou gira em relação ao membro,
+a mola-amortecedor gera **F = −K·deslocamento − B·velocidade** (e um momento
+**M = −Kr·θ − Br·ω**), expressos nas direções do cuff. Ela age no centro do cuff: no
+humano num sentido e no exo no sentido oposto (ação e reação).
+
 `analysis.coupling_loads(model, state)` e `coupling_loads_over_motion(model, mot)`
-devolvem, para cada acoplamento, a força/momento que o exo aplica **no humano**, no
-frame do cuff: `F_ap, F_axial, F_ml, M_ap, M_axial, M_ml, F_lat, F_radial, F_total`.
+devolvem, para cada acoplamento, o que o exo aplica **no humano**, no frame do cuff:
+`F_ap` (anteroposterior), `F_axial` (longitudinal), `F_ml` (mediolateral), `M_ap`,
+`M_axial` (torção em torno do membro), `M_ml`, `F_lat` (+ lateral do lado),
+`F_radial` (√(F_ap²+F_ml²), perpendicular ao membro) e `F_total`, em N e N·m.
 
 ### Cinemática do exo a partir do humano
 
@@ -129,7 +163,12 @@ abre `http://127.0.0.1:8765/`: 3D à esquerda; à direita, abas **Exo** (formul�
 gerado da config: qualquer chave nova do YAML aparece sozinha; reconstrói ao editar),
 **Pose** (sliders das coordenadas humanas, exo ajustado automaticamente),
 **Movimento** (carrega um `.mot`, ajusta e anima, com gráfico por acoplamento) e
-**Forças** (tabela). Salva YAML e exporta `.osim` (construído no modelo original,
+**Forças** (tabela). Poses prontas na aba Pose: em pé, sentado, agachamento, meio
+agachamento e subindo degrau; com “pés no chão” a altura da pelve é ajustada para o
+contato mais baixo do pé tocar o chão. Cada campo mostra a unidade e um “?” com a
+explicação. As setas de força têm a ponta no centro do cuff (onde a força age),
+aparecem por cima da malha, com o valor em N; dá para ver a resultante ou as
+componentes nos eixos do cuff, e alternar entre a força no humano e a reação no exo. Salva YAML e exporta `.osim` (construído no modelo original,
 com músculos). Three.js vem do jsdelivr (precisa de internet no navegador).
 
 ## Testes

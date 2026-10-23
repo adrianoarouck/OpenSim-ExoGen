@@ -74,8 +74,8 @@ def test_exo_axes_follow_human_coordinates(model_path):
 def test_config_validation_errors():
     with pytest.raises(ConfigError, match="sides"):
         load_config({"sides": ["x"]})
-    with pytest.raises(ConfigError, match="at must be"):
-        load_config({"segments": {"thigh": {"cuffs": [{"at": 1.5}]}}})
+    with pytest.raises(ConfigError, match="along_segment must be"):
+        load_config({"segments": {"thigh": {"cuffs": [{"along_segment": 1.5}]}}})
     with pytest.raises(ConfigError, match="unknown variables"):
         load_config({"cuff_defaults": {"model": "nonlinear", "expressions": {"Fx": "1000*deflection"}}})
     with pytest.raises(ConfigError, match="mass must be > 0"):
@@ -88,3 +88,27 @@ def test_side_override(model_path):
     bs = model.getBodySet()
     assert bs.get("exo_thigh_l").getMass() == pytest.approx(3.0)
     assert bs.get("exo_thigh_r").getMass() == pytest.approx(1.5)
+
+
+def test_legacy_key_names_are_migrated():
+    cfg = load_config({"segments": {"thigh": {"cuffs": [{"at": 0.3, "translational": {"ap": 1234}}]}},
+                       "joints": {"knee": {"dofs": {"flexion": {"stiffness": 2.0}}}}})
+    cuff = cfg["segments"]["thigh"]["cuffs"][0]
+    assert cuff["along_segment"] == 0.3
+    assert cuff["stiffness_translational"]["anteroposterior"] == 1234
+    assert cfg["joints"]["knee"]["dofs"]["flexion"]["passive_stiffness"] == 2.0
+
+
+def test_every_default_key_is_documented():
+    from exo_builder.config import DEFAULTS, DOF_DEFAULTS, PARAM_DOCS
+
+    def keys(d):
+        for k, v in d.items():
+            yield k
+            if isinstance(v, dict) and k not in ("bodies", "joints", "dofs", "segments", "radius_ratio",
+                                                  "overrides", "expressions") and k not in ("r", "l"):
+                yield from keys(v)
+    known_containers = {"thigh", "shank", "foot", "hip", "knee", "ankle", "pelvis", "floor", "flexion",
+                        "adduction", "rotation", "inversion"}
+    missing = {k for k in list(keys(DEFAULTS)) + list(DOF_DEFAULTS) if k not in PARAM_DOCS} - known_containers
+    assert not missing
