@@ -8,8 +8,7 @@ Opensim model generator of human body with exoskeleton. Focused on parameters of
 
 Adiciona um exoesqueleto (atuação direta na junta) em volta de um modelo humano
 OpenSim a partir de um arquivo YAML, modela a interface humano–exo (cuffs, cinto,
-amarração do pé, contato) e calcula as forças de interação. Substitui o script
-`exo_generator.py` (guardado em [legacy/](legacy/README.md), intocado; a documentação padrão do projeto está em inglês).
+amarração do pé, contato) e calcula as forças de interação.
 
 ## Estrutura
 

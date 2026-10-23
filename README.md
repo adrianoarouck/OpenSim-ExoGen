@@ -8,8 +8,7 @@ Opensim model generator of human body with exoskeleton. Focused on parameters of
 
 Adds an exoskeleton (direct joint actuation) around an OpenSim human model from a
 YAML file, models the human–exo interface (cuffs, pelvic belt, foot binding,
-ground contact) and computes the interaction forces. Replaces the original
-`exo_generator.py` script (kept untouched in [legacy/](legacy/README.md)).
+ground contact) and computes the interaction forces.
 
 ## Layout
 
