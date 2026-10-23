@@ -1,4 +1,8 @@
-# exo_builder — exoesqueleto configurável para modelos OpenSim
+# OpenSim-ExoGen
+
+Opensim model generator of human body with exoskeleton. Focused on parameters of the exoskeleton.
+
+## exo_builder — exoesqueleto configurável para modelos OpenSim
 
 Adiciona um exoesqueleto (atuação direta na junta) em volta de um modelo humano
 OpenSim a partir de um arquivo YAML, modela a interface humano–exo (cuffs, cinto,
