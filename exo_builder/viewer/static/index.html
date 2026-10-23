@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exo Builder Viewer</title>
+<link rel="stylesheet" href="/static/style.css">
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="app">
+  <section id="view">
+    <canvas id="canvas"></canvas>
+    <div id="overlay">
+      <label><input type="checkbox" id="showHuman" checked> humano</label>
+      <label>opacidade <input type="range" id="humanOpacity" min="0.05" max="1" step="0.05" value="0.45"></label>
+      <label><input type="checkbox" id="showArrows" checked> forças</label>
+      <label>escala <input type="range" id="arrowScale" min="0.0002" max="0.005" step="0.0002" value="0.001"></label>
+      <span id="status" class="status">carregando…</span>
+    </div>
+    <div id="error" hidden></div>
+  </section>
+  <aside id="panel">
+    <header>
+      <h1>Exo Builder</h1>
+      <div class="row">
+        <select id="preset" title="Carregar preset"></select>
+        <button id="loadPreset">Carregar</button>
+      </div>
+      <div class="row">
+        <input id="savePath" value="my_exo.yaml" title="Caminho do YAML">
+        <button id="save">Salvar YAML</button>
+      </div>
+      <div class="row">
+        <input id="exportPath" value="human_with_exo.osim" title="Caminho do .osim">
+        <button id="export">Exportar .osim</button>
+      </div>
+    </header>
+    <nav id="tabs">
+      <button data-tab="exo" class="active">Exo</button>
+      <button data-tab="pose">Pose</button>
+      <button data-tab="motion">Movimento</button>
+      <button data-tab="loads">Forças</button>
+    </nav>
+    <div id="tab-exo" class="tab active"><div id="form"></div></div>
+    <div id="tab-pose" class="tab">
+      <div class="row">
+        <label><input type="checkbox" id="autofit" checked> ajustar exo automaticamente (mín. energia dos cuffs)</label>
+      </div>
+      <div class="row"><button id="resetPose">Zerar pose</button></div>
+      <div id="sliders"></div>
+      <h3>Coordenadas do exo</h3>
+      <table id="exoCoords" class="grid"></table>
+    </div>
+    <div id="tab-motion" class="tab">
+      <p class="hint">Arquivo .mot/.sto do humano (IK). O exo é ajustado quadro a quadro e as forças de interação são calculadas.</p>
+      <div class="row"><input id="motionPath" value="Walking-tests/MOCAP-IK/walking1.mot"></div>
+      <div class="row">
+        <label>passo <input id="motionStep" type="number" value="2" min="1" style="width:4em"></label>
+        <button id="loadMotion">Carregar e ajustar</button>
+      </div>
+      <div class="row">
+        <button id="play" disabled>▶</button>
+        <input id="timeSlider" type="range" min="0" max="0" value="0" disabled>
+        <span id="timeLabel">–</span>
+      </div>
+      <canvas id="loadPlot" width="380" height="200"></canvas>
+      <div class="row"><select id="plotCoupling"></select><select id="plotComp">
+        <option>F_ap</option><option>F_ml</option><option>F_axial</option><option>F_total</option><option>M_axial</option>
+      </select></div>
+    </div>
+    <div id="tab-loads" class="tab">
+      <p class="hint">Força/momento que o exo aplica <b>no humano</b>, no frame do cuff: ap (+anterior), axial (+proximal), ml (+direita).</p>
+      <table id="loadsTable" class="grid"></table>
+    </div>
+  </aside>
+</div>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>

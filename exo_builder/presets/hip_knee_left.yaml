@@ -1,0 +1,5 @@
+# Left-side hip + knee exoskeleton with belt (no foot segment).
+name: hip_knee_left
+sides: [l]
+segments:
+  foot: {enabled: false}

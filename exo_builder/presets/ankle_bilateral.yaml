@@ -1,0 +1,10 @@
+# Bilateral ankle exoskeleton: shank shell + foot plate, no belt.
+name: ankle_bilateral
+pelvis_unit: {enabled: false}
+segments:
+  thigh: {enabled: false}
+  shank:
+    mass: 0.7
+    cuffs:
+      - {name: shank_cuff, at: 0.3, width: 0.07, translational: {ap: 5645, ml: 5645}, translational_damping: {ap: 418, ml: 418}}
+  foot: {mass: 0.5, mode: bushing}

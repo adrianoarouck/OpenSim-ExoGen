@@ -1,0 +1,91 @@
+# Full bilateral lower-limb exoskeleton (hip + knee + ankle, both sides).
+# Template: every key below is optional; omitted keys take the values from
+# exo_builder/config.py::DEFAULTS. Angles in degrees, SI units elsewhere.
+# "{s}" is replaced by the side letter (r / l).
+name: full_bilateral
+sides: [r, l]                 # [r] or [l] -> unilateral exo
+
+human:                        # names in the human .osim model
+  pelvis: pelvis
+  bodies: {thigh: "femur_{s}", shank: "tibia_{s}", foot: "calcn_{s}", toes: "toes_{s}"}
+  joints: {hip: "hip_{s}", knee: "walker_knee_{s}", ankle: "ankle_{s}"}
+  floor: floor                # ContactHalfSpace used by the foot contact spheres
+  radius_ratio: {thigh: [0.20, 0.13], shank: [0.12, 0.07]}   # limb radius / segment length (prox, dist)
+  use_markers: true           # refine limb radius with knee/ankle markers when present
+
+pelvis_unit:                  # belt + backpack; set enabled: false for exos without a belt
+  enabled: true
+  mass: 2.0
+  belt: {offset: [-0.02, 0.0, 0.0], height: 0.06, clearance: 0.03}
+  backpack: {enabled: true, mass: 3.0, size: [0.10, 0.30, 0.25], offset: [-0.16, 0.12, 0.0]}
+  attach:                     # belt <-> human pelvis. model: bushing | nonlinear | weld
+    model: bushing
+    translational: {ap: 20000, axial: 20000, ml: 20000}         # N/m
+    rotational: {ap: 300, axial: 300, ml: 300}                  # N.m/rad
+    translational_damping: {ap: 300, axial: 300, ml: 300}       # N.s/m
+    rotational_damping: {ap: 5, axial: 5, ml: 5}                # N.m.s/rad
+
+cuff_defaults:                # applied to every cuff, each cuff may override any key
+  at: 0.5                     # position along the segment (0 = proximal joint, 1 = distal joint)
+  width: 0.07
+  radius: auto                # limb radius at the cuff (m) or auto
+  offset: [0, 0, 0]           # extra shift of the cuff centre in the cuff frame (ap, axial, ml)
+  model: linear               # linear (BushingForce) | nonlinear (ExpressionBasedBushingForce)
+  translational: {ap: 3283, axial: 1000, ml: 3283}
+  rotational: {ap: 30, axial: 5, ml: 30}
+  translational_damping: {ap: 367, axial: 100, ml: 367}
+  rotational_damping: {ap: 1.0, axial: 0.2, ml: 1.0}
+  cubic: {ap: 0, axial: 0, ml: 0}   # nonlinear only: F = k*d + cubic*d^3
+
+segments:
+  thigh:
+    enabled: true
+    mass: 1.5
+    bar_radius: 0.012
+    clearance: 0.015          # gap between the skin and the lateral bar
+    cuffs:
+      - {name: thigh_cuff, at: 0.5, width: 0.08}
+  shank:
+    enabled: true
+    mass: 1.0
+    bar_radius: 0.010
+    clearance: 0.015
+    cuffs:
+      - name: shank_cuff
+        at: 0.4
+        width: 0.06
+        translational: {ap: 5645, ml: 5645}
+        translational_damping: {ap: 418, ml: 418}
+  foot:
+    enabled: true
+    mass: 0.6
+    mode: bushing             # weld | bushing | plate_contact
+    plate: {thickness: 0.008, length: auto, width: auto, margin: 0.01}
+    binding:                  # shoe strap (bushing and plate_contact modes)
+      model: bushing
+      translational: {ap: 50000, axial: 50000, ml: 50000}
+      rotational: {ap: 200, axial: 200, ml: 200}
+      translational_damping: {ap: 500, axial: 500, ml: 500}
+      rotational_damping: {ap: 5, axial: 5, ml: 5}
+
+joints:
+  # dofs keys: enabled, actuated, max_torque (N.m), range [deg], default [deg],
+  # limits: clamp | soft (CoordinateLimitForce) | none, limit_stiffness, limit_damping,
+  # stiffness / damping (passive spring), human_coord, axis: human | [x, y, z] (pelvis frame, right side)
+  hip:
+    misalignment: [0, 0, 0]   # exo joint centre - human joint centre (m, pelvis frame, right side)
+    dofs:
+      flexion: {enabled: true, actuated: true, max_torque: 100, range: [-40, 120], human_coord: "hip_flexion_{s}"}
+      adduction: {enabled: true, actuated: false, range: [-30, 30], human_coord: "hip_adduction_{s}"}
+      rotation: {enabled: true, actuated: false, range: [-40, 40], human_coord: "hip_rotation_{s}"}  # passive: lets the leg follow tibial rotation
+  knee:
+    misalignment: [0, 0, 0]
+    dofs:
+      flexion: {enabled: true, actuated: true, max_torque: 80, range: [-10, 120], human_coord: "knee_angle_{s}"}
+  ankle:
+    misalignment: [0, 0, 0]
+    dofs:
+      flexion: {enabled: true, actuated: true, max_torque: 60, range: [-40, 30], human_coord: "ankle_angle_{s}"}
+      inversion: {enabled: false, actuated: false, range: [-20, 20], human_coord: "subtalar_angle_{s}", axis: [1, 0, 0]}
+
+overrides: {}                 # e.g. {l: {segments: {thigh: {mass: 1.2}}}}

@@ -1,0 +1,5 @@
+# Full bilateral exo whose foot plates carry the ground contact: the human
+# contact spheres push on the plate, the plate spheres push on the floor.
+name: full_plate_contact
+segments:
+  foot: {mode: plate_contact, plate: {thickness: 0.01}}

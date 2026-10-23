@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# Logs
+*.log
+
+# Simulation results / generated outputs
+results/
+*.exo.yaml
+delete_this_to_stop_optimization_*.txt
+*_tracked_states.sto
+*_tracked_markers.sto
+*_solution.sto
+
+# Editor
+.vscode/

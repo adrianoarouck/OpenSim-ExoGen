@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "exo_builder"
+version = "0.1.0"
+description = "Configurable exoskeleton generator and human-exo interaction tools for OpenSim models"
+requires-python = ">=3.9"
+# opensim itself comes from conda (opensim-org channel), not pip.
+dependencies = ["numpy", "scipy", "pyyaml", "matplotlib"]
+
+[project.scripts]
+exo-builder = "exo_builder.cli:main"
+
+[tool.setuptools]
+packages = ["exo_builder", "exo_builder.viewer"]
+
+[tool.setuptools.package-data]
+exo_builder = ["presets/*.yaml"]
+"exo_builder.viewer" = ["static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore:builtin type .* has no __module__ attribute:DeprecationWarning"]

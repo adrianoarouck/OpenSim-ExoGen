@@ -1,0 +1,9 @@
+# Bilateral hip exoskeleton: belt + thigh links, actuated hip flexion only.
+name: hip_bilateral
+segments:
+  shank: {enabled: false}
+  foot: {enabled: false}
+  thigh:
+    mass: 1.0
+    cuffs:
+      - {name: thigh_cuff, at: 0.55, width: 0.08}
