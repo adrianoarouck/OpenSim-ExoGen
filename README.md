@@ -7,7 +7,22 @@ Opensim model generator of human body with exoskeleton. Focused on parameters of
 Adiciona um exoesqueleto (atuação direta na junta) em volta de um modelo humano
 OpenSim a partir de um arquivo YAML, modela a interface humano–exo (cuffs, cinto,
 amarração do pé, contato) e calcula as forças de interação. Substitui o script
-`exo_generator.py` (mantido como legado, intocado).
+`exo_generator.py` (guardado em [legacy/](legacy/README.md), intocado).
+
+## Estrutura
+
+```
+exo_builder/        pacote (config, builder, interação, análise, cinemática, CLI)
+  presets/          exos prontos em YAML
+  viewer/           visualizador web
+examples/           moco_track_exo.py (MocoTrack com exo)
+tests/              pytest
+models/             subject_walk_contact.osim (modelo humano base) + Geometry/ (malhas .vtp)
+data/walking/       marcha: MARKERS (.trc), MOCAP-IK (.mot), FORCE-MOT, SETUP-ID, SO-results
+legacy/             scripts, modelos, setups e resultados do fluxo antigo (ver legacy/README.md)
+```
+
+Os comandos abaixo devem ser rodados a partir da raiz do projeto.
 
 Ambiente alvo: conda `opensim46` (OpenSim 4.6, Python 3.11). Dependências extras:
 `pip install pyyaml pytest` (numpy, scipy e matplotlib já existem no ambiente).
@@ -20,10 +35,10 @@ Ambiente alvo: conda `opensim46` (OpenSim 4.6, Python 3.11). Dependências extra
 
 ```bash
 python -m exo_builder presets
-python -m exo_builder build hip_bilateral --model subject_walk_contact.osim -o subject_hip_exo.osim
-python -m exo_builder fit subject_hip_exo.osim Walking-tests/MOCAP-IK/walking1.mot -o walking1_exo.mot
+python -m exo_builder build hip_bilateral --model models/subject_walk_contact.osim -o subject_hip_exo.osim
+python -m exo_builder fit subject_hip_exo.osim data/walking/MOCAP-IK/walking1.mot -o walking1_exo.mot
 python -m exo_builder forces subject_hip_exo.osim walking1_exo.mot -o walking1_cuffs.sto --plot cuffs.png
-python -m exo_builder.viewer --model subject_walk_contact.osim --config full_bilateral
+python -m exo_builder.viewer --model models/subject_walk_contact.osim --config full_bilateral
 ```
 
 Em Python:
@@ -31,7 +46,7 @@ Em Python:
 ```python
 import exo_builder                       # primeiro!
 import opensim as osim
-model, info = exo_builder.build_exo("subject_walk_contact.osim", "my_exo.yaml")
+model, info = exo_builder.build_exo("models/subject_walk_contact.osim", "my_exo.yaml")
 model.printToXML("human_with_exo.osim")
 print(info["couplings"], info["warnings"])
 ```
@@ -147,7 +162,7 @@ devolvem, para cada acoplamento, o que o exo aplica **no humano**, no frame do c
 `kinematics.fit_exo_to_motion` resolve, quadro a quadro, as coordenadas do exo que
 minimizam a energia elástica dos acoplamentos com o humano fixo (pose de um exo
 sem massa e sem atuação). Gera um `.mot` completo (humano + exo) para ID/SO, guess
-do Moco ou análise de forças. Substitui o `IK_setup_virtual_marker.py`.
+do Moco ou análise de forças. Substitui o `legacy/scripts/IK_setup_virtual_marker.py`.
 
 ## Moco
 
@@ -156,13 +171,13 @@ cinemática, roda `MocoTrack` (sem músculos, reservas só nas coordenadas human
 calcula as forças nos cuffs ao longo da solução. Testado: `hip_bilateral`,
 0,5–0,8 s, malha 0,05 s → *Optimal Solution Found* em ~60 s.
 
-Observação sobre o `exampleMocoTrack.py` antigo: a remoção de atuadores do exo usa
+Observação sobre o `legacy/scripts/exampleMocoTrack.py`: a remoção de atuadores do exo usa
 `remove(qt)` com índice fixo (remove o item errado) e depois `track.setModel(modelProcessor)`
 usa o processor original, descartando o modelo modificado.
 
 ## Visualizador
 
-`python -m exo_builder.viewer --model subject_walk_contact.osim --config full_bilateral`
+`python -m exo_builder.viewer --model models/subject_walk_contact.osim --config full_bilateral`
 abre `http://127.0.0.1:8765/`: 3D à esquerda; à direita, abas **Exo** (formulário
 gerado da config: qualquer chave nova do YAML aparece sozinha; reconstrói ao editar),
 **Pose** (sliders das coordenadas humanas, exo ajustado automaticamente),

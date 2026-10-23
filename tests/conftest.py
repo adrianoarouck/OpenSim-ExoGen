@@ -7,8 +7,8 @@ import exo_builder  # noqa: E402,F401  FIRST import (opensim/numpy/Moco DLL setu
 
 import opensim as osim  # noqa: E402
 import pytest  # noqa: E402
-MODEL = str(ROOT / "subject_walk_contact.osim")
-MOTION = str(ROOT / "Walking-tests" / "MOCAP-IK" / "walking1.mot")
+MODEL = str(ROOT / "models" / "subject_walk_contact.osim")
+MOTION = str(ROOT / "data" / "walking" / "MOCAP-IK" / "walking1.mot")
 osim.Logger.setLevelString("error")
 
 

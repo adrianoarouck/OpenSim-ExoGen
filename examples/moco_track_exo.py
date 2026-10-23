@@ -47,8 +47,8 @@ def processed_model(model_path):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--preset", default="hip_bilateral")
-    p.add_argument("--model", default=str(ROOT / "subject_walk_contact.osim"))
-    p.add_argument("--motion", default=str(ROOT / "Walking-tests" / "MOCAP-IK" / "walking1.mot"))
+    p.add_argument("--model", default=str(ROOT / "models" / "subject_walk_contact.osim"))
+    p.add_argument("--motion", default=str(ROOT / "data" / "walking" / "MOCAP-IK" / "walking1.mot"))
     p.add_argument("--t0", type=float, default=0.5)
     p.add_argument("--t1", type=float, default=0.8)
     p.add_argument("--mesh", type=float, default=0.05)

@@ -1,10 +1,10 @@
 """Command line interface.
 
     python -m exo_builder presets
-    python -m exo_builder build hip_bilateral --model subject_walk_contact.osim -o subject_hip_exo.osim
-    python -m exo_builder fit subject_hip_exo.osim Walking-tests/MOCAP-IK/walking1.mot -o walking1_exo.mot
+    python -m exo_builder build hip_bilateral --model models/subject_walk_contact.osim -o subject_hip_exo.osim
+    python -m exo_builder fit subject_hip_exo.osim data/walking/MOCAP-IK/walking1.mot -o walking1_exo.mot
     python -m exo_builder forces subject_hip_exo.osim walking1_exo.mot -o walking1_cuffs.sto --plot cuffs.png
-    python -m exo_builder.viewer --model subject_walk_contact.osim --config hip_bilateral
+    python -m exo_builder.viewer --model models/subject_walk_contact.osim --config hip_bilateral
 """
 import argparse
 import json

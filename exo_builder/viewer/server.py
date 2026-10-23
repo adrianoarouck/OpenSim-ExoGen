@@ -1,6 +1,6 @@
 """Local web viewer: edit an exo configuration and see it on the human model in real time.
 
-    python -m exo_builder.viewer --model subject_walk_contact.osim --config full_bilateral
+    python -m exo_builder.viewer --model models/subject_walk_contact.osim --config full_bilateral
 
 Backend: Python standard library HTTP server + OpenSim (one lock around every
 OpenSim call, the API is not thread safe). Frontend: static/index.html with
@@ -334,7 +334,7 @@ def make_handler(session):
 
 def main(argv=None):
     p = argparse.ArgumentParser(description="exo_builder web viewer")
-    p.add_argument("--model", default="subject_walk_contact.osim", help="human .osim")
+    p.add_argument("--model", default="models/subject_walk_contact.osim", help="human .osim")
     p.add_argument("--config", default="full_bilateral", help="preset name or YAML")
     p.add_argument("--port", type=int, default=8765)
     p.add_argument("--no-browser", action="store_true")

@@ -3,7 +3,7 @@
     import exo_builder                  # FIRST import of the script (sets up opensim, see below)
     import opensim as osim
     import numpy as np
-    model, info = exo_builder.build_exo("subject_walk_contact.osim", "hip_bilateral")
+    model, info = exo_builder.build_exo("models/subject_walk_contact.osim", "hip_bilateral")
     model.printToXML("subject_hip_exo.osim")
 
 Why it must be the first import (Windows, OpenSim 4.6 from conda; all verified):
