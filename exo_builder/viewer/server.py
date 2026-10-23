@@ -36,11 +36,11 @@ STATIC = Path(__file__).parent / "static"
 # forward, ankle_angle > 0 is dorsiflexion; feet stay flat when
 # ankle = knee - hip - pelvis_tilt.
 POSES = {
-    "em_pe": {},
-    "sentado": {"pelvis_tilt": 0, "hip_flexion": 90, "knee_angle": 90, "ankle_angle": 0},
-    "agachamento": {"pelvis_tilt": -20, "hip_flexion": 105, "knee_angle": 105, "ankle_angle": 20},
-    "meio_agachamento": {"pelvis_tilt": -10, "hip_flexion": 60, "knee_angle": 70, "ankle_angle": 20},
-    "subindo_degrau": {"hip_flexion_r": 60, "knee_angle_r": 75, "ankle_angle_r": 15,
+    "standing": {},
+    "sitting": {"pelvis_tilt": 0, "hip_flexion": 90, "knee_angle": 90, "ankle_angle": 0},
+    "squat": {"pelvis_tilt": -20, "hip_flexion": 105, "knee_angle": 105, "ankle_angle": 20},
+    "half_squat": {"pelvis_tilt": -10, "hip_flexion": 60, "knee_angle": 70, "ankle_angle": 20},
+    "step_up": {"hip_flexion_r": 60, "knee_angle_r": 75, "ankle_angle_r": 15,
                        "hip_flexion_l": -5, "knee_angle_l": 5, "ankle_angle_l": 0},
 }
 GEOMS = {
@@ -314,7 +314,7 @@ def make_handler(session):
                         session.set_named_pose(body["named"])
                     session.pose_deg.update(body.get("pose", {}))
                     if body.get("reset"):
-                        session.set_named_pose("em_pe")
+                        session.set_named_pose("standing")
                     session.apply_pose()
                     return session.pose()
                 return self._guard(run)

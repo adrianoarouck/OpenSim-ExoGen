@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -17,19 +17,19 @@
   <section id="view">
     <canvas id="canvas"></canvas>
     <div id="overlay">
-      <label><input type="checkbox" id="showHuman" checked> humano</label>
-      <label>opacidade <input type="range" id="humanOpacity" min="0.05" max="1" step="0.05" value="0.45"></label>
-      <label><input type="checkbox" id="showArrows" checked> forças</label>
-      <select id="arrowMode" title="Como desenhar a força de cada acoplamento">
-        <option value="resultant">resultante</option>
-        <option value="components">componentes (AP / long. / ML)</option>
+      <label><input type="checkbox" id="showHuman" checked> human</label>
+      <label>opacity <input type="range" id="humanOpacity" min="0.05" max="1" step="0.05" value="0.45"></label>
+      <label><input type="checkbox" id="showArrows" checked> forces</label>
+      <select id="arrowMode" title="How to draw the force of each coupling">
+        <option value="resultant">resultant</option>
+        <option value="components">components (AP / long. / ML)</option>
       </select>
-      <select id="arrowBody" title="A força do exo sobre o humano é igual e oposta à do humano sobre o exo">
-        <option value="human">sobre o humano</option>
-        <option value="exo">sobre o exo (reação)</option>
+      <select id="arrowBody" title="The force of the exo on the human is equal and opposite to the force of the human on the exo">
+        <option value="human">on the human</option>
+        <option value="exo">on the exo (reaction)</option>
       </select>
-      <label>escala <input type="range" id="arrowScale" min="0.0002" max="0.005" step="0.0002" value="0.001"></label>
-      <span id="status" class="status">carregando…</span>
+      <label>scale <input type="range" id="arrowScale" min="0.0002" max="0.005" step="0.0002" value="0.001"></label>
+      <span id="status" class="status">loading…</span>
     </div>
     <div id="legend"></div>
     <div id="error" hidden></div>
@@ -38,48 +38,48 @@
     <header>
       <h1>Exo Builder</h1>
       <div class="row">
-        <select id="preset" title="Carregar preset"></select>
-        <button id="loadPreset">Carregar</button>
+        <select id="preset" title="Load preset"></select>
+        <button id="loadPreset">Load</button>
       </div>
       <div class="row">
-        <input id="savePath" value="my_exo.yaml" title="Caminho do YAML">
-        <button id="save">Salvar YAML</button>
+        <input id="savePath" value="my_exo.yaml" title="YAML path">
+        <button id="save">Save YAML</button>
       </div>
       <div class="row">
-        <input id="exportPath" value="human_with_exo.osim" title="Caminho do .osim">
-        <button id="export">Exportar .osim</button>
+        <input id="exportPath" value="human_with_exo.osim" title=".osim path">
+        <button id="export">Export .osim</button>
       </div>
     </header>
     <nav id="tabs">
       <button data-tab="exo" class="active">Exo</button>
       <button data-tab="pose">Pose</button>
-      <button data-tab="motion">Movimento</button>
-      <button data-tab="loads">Forças</button>
+      <button data-tab="motion">Motion</button>
+      <button data-tab="loads">Forces</button>
     </nav>
     <div id="tab-exo" class="tab active"><div id="form"></div></div>
     <div id="tab-pose" class="tab">
       <div class="row">
         <select id="namedPose"></select>
-        <button id="applyPose">Aplicar pose</button>
+        <button id="applyPose">Apply pose</button>
       </div>
       <div class="row">
-        <label><input type="checkbox" id="autofit" checked> ajustar exo automaticamente (mín. energia dos cuffs)
-          <span class="help" title="O exo vai para a pose em que as molas dos cuffs guardam a menor energia, como um exo sem massa e sem motor. Desligue para ver o exo parado enquanto o humano se move.">?</span></label>
+        <label><input type="checkbox" id="autofit" checked> fit the exo automatically (min. cuff energy)
+          <span class="help" title="The exo moves to the pose where the cuff springs store the least energy, like a massless exo without motors. Turn it off to keep the exo still while the human moves.">?</span></label>
       </div>
       <div class="row">
-        <label><input type="checkbox" id="groundFeet" checked> pés no chão
-          <span class="help" title="Ajusta a altura da pelve (pelvis_ty) para que o ponto de contato mais baixo do pé encoste no chão.">?</span></label>
+        <label><input type="checkbox" id="groundFeet" checked> feet on the floor
+          <span class="help" title="Adjusts the pelvis height (pelvis_ty) so the lowest foot contact point touches the floor.">?</span></label>
       </div>
       <div id="sliders"></div>
-      <h3>Coordenadas do exo</h3>
+      <h3>Exo coordinates</h3>
       <table id="exoCoords" class="grid"></table>
     </div>
     <div id="tab-motion" class="tab">
-      <p class="hint">Arquivo .mot/.sto do humano (IK). O exo é ajustado quadro a quadro e as forças de interação são calculadas.</p>
+      <p class="hint">Human .mot/.sto file (IK). The exo is fitted frame by frame and the interaction forces are computed.</p>
       <div class="row"><input id="motionPath" value="data/walking/MOCAP-IK/walking1.mot"></div>
       <div class="row">
-        <label>passo <input id="motionStep" type="number" value="2" min="1" style="width:4em"></label>
-        <button id="loadMotion">Carregar e ajustar</button>
+        <label>step <input id="motionStep" type="number" value="2" min="1" style="width:4em"></label>
+        <button id="loadMotion">Load and fit</button>
       </div>
       <div class="row">
         <button id="play" disabled>▶</button>
@@ -94,11 +94,12 @@
       </select></div>
     </div>
     <div id="tab-loads" class="tab">
-      <p class="hint">Cada acoplamento (cuff, cinto, amarração do pé) é uma mola-amortecedor 6-DOF entre um ponto no
-        membro e um ponto no exo, coincidentes na pose de referência. Quando o exo se desloca/gira em relação ao membro,
-        surge uma força <b>F = −K·deslocamento − B·velocidade</b> (e um momento), aplicada no centro do cuff: no humano
-        num sentido e no exo no sentido oposto. A tabela mostra o que o exo aplica <b>no humano</b>, nos eixos do cuff:
-        AP (+frente), longitudinal (+em direção à junta proximal), ML (+direita); M_long é a torção em torno do membro.</p>
+      <p class="hint">Each coupling (cuff, belt, foot binding) is a 6-DOF spring-damper between a point on the
+        limb and a point on the exo, coincident at the reference pose. When the exo moves/rotates relative to the limb,
+        a force <b>F = −K·displacement − B·velocity</b> (and a moment) arises, applied at the cuff centre: on the human
+        in one direction and on the exo in the opposite one. The table shows what the exo applies <b>on the human</b>,
+        in the cuff axes: AP (+forward), longitudinal (+towards the proximal joint), ML (+right); M_long is the twist
+        about the limb.</p>
       <table id="loadsTable" class="grid"></table>
     </div>
   </aside>

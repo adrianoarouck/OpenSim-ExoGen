@@ -173,10 +173,10 @@ function drawArrows(loads) {
 }
 
 function updateLegend(mode, sign) {
-  const who = sign > 0 ? "do exo <b>sobre o humano</b>" : "do humano <b>sobre o exo</b> (reação)";
+  const who = sign > 0 ? "of the exo <b>on the human</b>" : "of the human <b>on the exo</b> (reaction)";
   $("legend").innerHTML = mode === "resultant"
-    ? `Seta = força ${who}; a ponta está no centro do cuff, onde a força é aplicada. Cor: verde (pequena) → vermelho (≥ 300 N).`
-    : `Componentes da força ${who} nos eixos do cuff: <i style="background:#e5484d"></i>anteroposterior
+    ? `Arrow = force ${who}; its tip is at the cuff centre, where the force acts. Colour: green (small) → red (≥ 300 N).`
+    : `Components of the force ${who} in the cuff axes: <i style="background:#e5484d"></i>anteroposterior
        <i style="background:#30a46c"></i>longitudinal <i style="background:#3e63dd"></i>mediolateral.`;
 }
 
@@ -200,9 +200,9 @@ function fillLoadsTable(loads) {
   lastLoads = loads;
   const rows = loads.map((l) => `<tr><td>${l.name}</td><td>${fmt(l.F_ap)}</td><td>${fmt(l.F_axial)}</td>
     <td>${fmt(l.F_ml)}</td><td>${fmt(l.F_total)}</td><td>${fmt(l.M_axial, 2)}</td></tr>`).join("");
-  $("loadsTable").innerHTML = `<tr><th>acoplamento</th><th title="anteroposterior, + frente">F_AP [N]</th>
-    <th title="longitudinal, + em direção à junta proximal">F_long [N]</th><th title="mediolateral, + direita">F_ML [N]</th>
-    <th>|F| [N]</th><th title="torção em torno do eixo do membro">M_long [N·m]</th></tr>${rows}`;
+  $("loadsTable").innerHTML = `<tr><th>coupling</th><th title="anteroposterior, + forward">F_AP [N]</th>
+    <th title="longitudinal, + towards the proximal joint">F_long [N]</th><th title="mediolateral, + right">F_ML [N]</th>
+    <th>|F| [N]</th><th title="twist about the limb axis">M_long [N·m]</th></tr>${rows}`;
 }
 function fillExoCoords(exo) {
   $("exoCoords").innerHTML = Object.entries(exo).map(([k, v]) => `<tr><td>${k}</td><td>${v.toFixed(2)}</td></tr>`).join("");
@@ -213,11 +213,11 @@ const ENUM_KEYS = { mode: "mode", model: "model", limits: "limits" };
 let rebuildTimer = null;
 function scheduleRebuild() {
   clearTimeout(rebuildTimer);
-  setStatus("alterado…");
+  setStatus("changed…");
   rebuildTimer = setTimeout(rebuild, 400);
 }
 async function rebuild() {
-  setStatus("reconstruindo…");
+  setStatus("rebuilding…");
   try {
     const scene = await api("/api/build", { config: state.config });
     showError(null);
@@ -225,9 +225,9 @@ async function rebuild() {
     await buildScene(scene);
     renderSliders(scene.coordinates);
     const i = scene.info;
-    setStatus(`exo ${i.exo_mass.toFixed(2)} kg · ${i.coordinates.length} coords · ${i.couplings.length} acoplamentos`);
-    if (i.warnings.length) showError("Avisos:\n" + i.warnings.join("\n"));
-  } catch (e) { showError(e); setStatus("erro"); }
+    setStatus(`exo ${i.exo_mass.toFixed(2)} kg · ${i.coordinates.length} coords · ${i.couplings.length} couplings`);
+    if (i.warnings.length) showError("Warnings:\n" + i.warnings.join("\n"));
+  } catch (e) { showError(e); setStatus("error"); }
 }
 
 function input(type, value, onChange, attrs = {}) {
@@ -277,10 +277,10 @@ function renderValue(obj, key, path) {
         scheduleRebuild();
       });
       const lab = document.createElement("label");
-      lab.append(cb, ` ${s === "r" ? "direito" : "esquerdo"}`);
+      lab.append(cb, ` ${s === "r" ? "right" : "left"}`);
       box.append(lab);
     }
-    return field("lados", box);
+    return field("sides", box);
   }
   if (ENUM_KEYS[key] && typeof v === "string") {
     const sel = input("select", v, set);
@@ -342,7 +342,7 @@ function renderList(obj, key, path) {
     const sub = renderObject(item, item.name || `${key}[${i}]`, `${path}[${i}]`, true);
     const del = document.createElement("button");
     del.className = "small";
-    del.textContent = "remover";
+    del.textContent = "remove";
     del.onclick = () => { obj[key].splice(i, 1); renderForm(); scheduleRebuild(); };
     sub.append(del);
     if (key === "cuffs") addMissingCuffKeys(item, sub);
@@ -350,7 +350,7 @@ function renderList(obj, key, path) {
   });
   const add = document.createElement("button");
   add.className = "small";
-  add.textContent = `+ adicionar ${key === "cuffs" ? "cuff" : "item"}`;
+  add.textContent = `+ add ${key === "cuffs" ? "cuff" : "item"}`;
   add.onclick = () => {
     const last = obj[key][obj[key].length - 1];
     const item = last ? JSON.parse(JSON.stringify(last))
@@ -369,7 +369,7 @@ function addMissingCuffKeys(item, container) {
   const missing = Object.keys(state.config.cuff_defaults).filter((k) => !(k in item));
   if (!missing.length) return;
   const sel = document.createElement("select");
-  sel.add(new Option("+ sobrescrever parâmetro…", ""));
+  sel.add(new Option("+ override parameter…", ""));
   for (const k of missing) sel.add(new Option(k, k));
   sel.onchange = () => {
     if (!sel.value) return;
@@ -441,13 +441,13 @@ function renderSliders(coords) {
 }
 $("autofit").onchange = () => sendPose({});
 $("groundFeet").onchange = () => sendPose({});
-const POSE_LABELS = { em_pe: "Em pé", sentado: "Sentado", agachamento: "Agachamento",
-  meio_agachamento: "Meio agachamento", subindo_degrau: "Subindo degrau (perna direita)" };
+const POSE_LABELS = { standing: "Standing", sitting: "Sitting", squat: "Squat",
+  half_squat: "Half squat", step_up: "Step up (right leg)" };
 $("applyPose").onclick = () => sendPose({ named: $("namedPose").value });
 
 // ------------------------------------------------------------------ motion
 $("loadMotion").onclick = async () => {
-  setStatus("ajustando movimento…");
+  setStatus("fitting motion…");
   $("loadMotion").disabled = true;
   try {
     state.motion = await api("/api/motion", { path: $("motionPath").value, step: +$("motionStep").value });
@@ -458,8 +458,8 @@ $("loadMotion").onclick = async () => {
     sel.innerHTML = "";
     for (const l of state.motion.frames[0].loads) sel.add(new Option(l.name, l.name));
     showFrame(0);
-    setStatus(`${n} quadros · energia máx. dos acoplamentos ${Math.max(...state.motion.energy).toFixed(2)} J`);
-  } catch (e) { showError(e); setStatus("erro"); }
+    setStatus(`${n} frames · max coupling energy ${Math.max(...state.motion.energy).toFixed(2)} J`);
+  } catch (e) { showError(e); setStatus("error"); }
   $("loadMotion").disabled = false;
 };
 function showFrame(i) {
@@ -515,13 +515,13 @@ $("loadPreset").onclick = async () => {
   catch (e) { showError(e); }
 };
 $("save").onclick = async () => {
-  try { const r = await api("/api/save", { path: $("savePath").value }); setStatus(`salvo: ${r.written}`); }
+  try { const r = await api("/api/save", { path: $("savePath").value }); setStatus(`saved: ${r.written}`); }
   catch (e) { showError(e); }
 };
 $("export").onclick = async () => {
-  setStatus("exportando…");
-  try { const r = await api("/api/export", { path: $("exportPath").value }); setStatus(`exportado: ${r.written}`); }
-  catch (e) { showError(e); setStatus("erro"); }
+  setStatus("exporting…");
+  try { const r = await api("/api/export", { path: $("exportPath").value }); setStatus(`exported: ${r.written}`); }
+  catch (e) { showError(e); setStatus("error"); }
 };
 document.querySelectorAll("#tabs button").forEach((b) => b.onclick = () => {
   document.querySelectorAll("#tabs button, .tab").forEach((x) => x.classList.remove("active"));
@@ -543,6 +543,6 @@ document.querySelectorAll("#tabs button").forEach((b) => b.onclick = () => {
     await buildScene(scene);
     renderSliders(scene.coordinates);
     const i = scene.info;
-    setStatus(`exo ${i.exo_mass.toFixed(2)} kg · ${i.coordinates.length} coords · ${i.couplings.length} acoplamentos`);
-  } catch (e) { showError(e); setStatus("erro"); }
+    setStatus(`exo ${i.exo_mass.toFixed(2)} kg · ${i.coordinates.length} coords · ${i.couplings.length} couplings`);
+  } catch (e) { showError(e); setStatus("error"); }
 })();
