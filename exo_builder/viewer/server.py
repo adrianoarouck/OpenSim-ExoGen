@@ -145,10 +145,16 @@ class Session:
         """Shift pelvis_ty so the lowest contact sphere touches y = 0, then refit the exo."""
         self.model.realizePosition(self.state)
         lowest = np.inf
+        floor = self.cfg["human"]["floor"]
+        on_floor = set()  # spheres that touch the floor (not the pads of contact cuffs)
+        for f in self.model.getForceSet():
+            if f.getConcreteClassName() == "SmoothSphereHalfSpaceForce" and \
+                    f.getSocket("half_space").getConnecteePath().endswith(f"/{floor}"):
+                on_floor.add(f.getSocket("sphere").getConnecteePath().split("/")[-1])
         cgs = self.model.getContactGeometrySet()
         for i in range(cgs.getSize()):
             sph = osim.ContactSphere.safeDownCast(cgs.get(i))
-            if sph is not None:
+            if sph is not None and sph.getName() in on_floor:
                 y = sph.getFrame().findStationLocationInGround(self.state, sph.get_location()).get(1)
                 lowest = min(lowest, y - sph.getRadius())
         if not np.isfinite(lowest) or abs(lowest) < 1e-5:
@@ -199,16 +205,10 @@ class Session:
             T = f["obj"].getTransformInGround(s)
             transforms[f["path"]] = to_np(T.p()).tolist() + quat(rot_to_np(T.R()))
         loads = []
-        fs = self.model.getForceSet()
         for name, d in coupling_loads(self.model, s).items():
-            rec = fs.get(name).getRecordValues(s)
-            f1 = osim.PhysicalFrame.safeDownCast(self.model.getComponent(
-                fs.get(name).getSocket("frame1").getConnecteePath()))
-            T1 = f1.getTransformInGround(s)
-            loads.append({"name": name, "origin": to_np(T1.p()).tolist(),
-                          "force": [rec.get(i) for i in range(3)],
+            loads.append({"name": name, "origin": d["origin"].tolist(), "force": d["F_ground"].tolist(),
                           # cuff axes in ground: anteroposterior, longitudinal, mediolateral
-                          "axes": rot_to_np(T1.R()).T.tolist(),
+                          "axes": d["axes"].tolist(),
                           **{k: float(d[k]) for k in ("F_ap", "F_axial", "F_ml", "M_ap", "M_axial", "M_ml",
                                                       "F_lat", "F_total")}})
         exo = {n: float(np.degrees(self.model.getCoordinateSet().get(n).getValue(s))
@@ -287,8 +287,9 @@ def make_handler(session):
             if url.path == "/api/meta":
                 return self._guard(lambda: {
                     "presets": C.list_presets(), "defaults": C.DEFAULTS, "dof_defaults": C.DOF_DEFAULTS,
-                    "enums": {"mode": C.FOOT_MODES, "model": C.COUPLING_MODELS, "limits": C.LIMIT_MODES},
-                    "docs": C.PARAM_DOCS, "poses": list(POSES),
+                    "enums": {"mode": C.FOOT_MODES, "model": C.COUPLING_MODELS, "cuff_model": C.CUFF_MODELS,
+                              "limits": C.LIMIT_MODES},
+                    "docs": C.PARAM_DOCS, "model_docs": C.MODEL_DOCS, "references": C.REFERENCES, "poses": list(POSES),
                     "model": session.human_path})
             if url.path == "/api/mesh":
                 name = parse_qs(url.query).get("file", [""])[0]

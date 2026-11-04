@@ -1,8 +1,10 @@
 """Human-exo interaction loads (cuffs, belt, foot binding).
 
-Each coupling is a BushingForce / ExpressionBasedBushingForce whose frame1 is on
-the human. Loads are reported as the force/moment the exo applies ON THE HUMAN,
-expressed in the human-side coupling frame at its origin:
+A coupling is a BushingForce / ExpressionBasedBushingForce whose frame1 is on
+the human side (the human body, or the ring of a sliding cuff), or, for
+``contact`` cuffs, the group of pad forces ``<cuff>_pad<row>_<k>`` (see
+interaction.py). Loads are reported as the force/moment the exo applies ON THE
+HUMAN, expressed in the human-side coupling frame at its origin:
 
     F_ap  (+ anterior)   F_axial (+ proximal / up)   F_ml (+ right)
     M_ap, M_axial, M_ml  (about the coupling centre)
@@ -12,46 +14,96 @@ Implementation notes (verified on OpenSim 4.5 and 4.6):
 * getRecordValues(state) gives 12 numbers: force and torque on the frame1 body,
   then on the frame2 body, in ground; the torque is about the BODY ORIGIN, so it
   is shifted to the coupling centre here. Stage Velocity is enough.
+  SmoothSphereHalfSpaceForce has the same layout (sphere first, then half-space).
 """
 import numpy as np
 import opensim as osim
 
 from .geometry import rot_to_np, to_np
+from .interaction import PAD_RE, STRAP_SUFFIX
 
 LOAD_KEYS = ("F_ap", "F_axial", "F_ml", "M_ap", "M_axial", "M_ml", "F_lat", "F_radial", "F_total")
 BUSHING_TYPES = ("BushingForce", "ExpressionBasedBushingForce")
 
 
+def coupling_parts(model):
+    """{coupling name: (reference frame, [(force, record offset of the human side)])}.
+
+    The strap bushing of a ``ring`` cuff is internal to the exo and is left out.
+    """
+    out = {}
+    for f in model.getForceSet():
+        cls, name = f.getConcreteClassName(), f.getName()
+        if cls in BUSHING_TYPES and not name.endswith(STRAP_SUFFIX):
+            frame1 = getattr(osim, cls).safeDownCast(f).getFrame1()  # owned by the model: safe
+            out[name] = (frame1, [(f, 0)])
+        elif cls == "SmoothSphereHalfSpaceForce" and PAD_RE.match(name):
+            cuff = PAD_RE.match(name).group("cuff")
+            if cuff not in out:
+                hs = model.getComponent(f.getSocket("half_space").getConnecteePath())
+                body = osim.ContactGeometry.safeDownCast(hs).getFrame().findBaseFrame()
+                out[cuff] = (osim.PhysicalFrame.safeDownCast(body.getComponent(f"{cuff}_human")), [])
+            out[cuff][1].append((f, 6))  # human side = half-space (second half of the record)
+    return out
+
+
 def find_couplings(model):
-    """Names of every bushing-type force in the model (cuffs, belt, bindings...)."""
-    return [f.getName() for f in model.getForceSet() if f.getConcreteClassName() in BUSHING_TYPES]
+    """Names of every coupling in the model (cuffs, belt, bindings...)."""
+    return list(coupling_parts(model))
 
 
 def _side_sign(name):
     return -1.0 if name.endswith("_l") else 1.0
 
 
+def _deflection(model, state, name, parts):
+    """[theta_x, theta_y, theta_z, dx, dy, dz]: bushing deflection, or for contact cuffs the
+    pose of ``<cuff>_exo`` relative to ``<cuff>_human`` (small-angle rotation vector)."""
+    f, offset = parts[0]
+    if offset == 0:
+        return to_np(getattr(osim, f.getConcreteClassName()).safeDownCast(f).computeDeflection(state))
+    sph = model.getComponent(f.getSocket("sphere").getConnecteePath())
+    hs = model.getComponent(f.getSocket("half_space").getConnecteePath())
+    f_h = osim.ContactGeometry.safeDownCast(hs).getFrame().findBaseFrame().getComponent(f"{name}_human")
+    f_e = osim.ContactGeometry.safeDownCast(sph).getFrame().findBaseFrame().getComponent(f"{name}_exo")
+    T = osim.Frame.safeDownCast(f_h).findTransformBetween(state, osim.Frame.safeDownCast(f_e))
+    R = rot_to_np(T.R())
+    ang = 0.5 * np.array([R[2, 1] - R[1, 2], R[0, 2] - R[2, 0], R[1, 0] - R[0, 1]])
+    return np.concatenate([ang, to_np(T.p())])
+
+
 def coupling_loads(model, state, names=None):
-    """Loads of each coupling at ``state`` (needs at least Stage::Velocity). Returns {name: dict}."""
+    """Loads of each coupling at ``state`` (needs at least Stage::Velocity). Returns {name: dict}.
+
+    Besides LOAD_KEYS, each entry has ``F_ground`` (force on the human, ground axes),
+    ``origin`` and ``axes`` (reference frame origin and its X/Y/Z axes in ground, as rows)
+    and ``deflection``.
+    """
     model.realizeVelocity(state)
     out = {}
-    fs = model.getForceSet()
-    for name in names or find_couplings(model):
-        f = fs.get(name)
-        cls = getattr(osim, f.getConcreteClassName()).safeDownCast(f)  # owned by the model: safe
-        rec = f.getRecordValues(state)
-        F_g = np.array([rec.get(i) for i in range(3)])
-        T_g = np.array([rec.get(i) for i in range(3, 6)])
-        frame1 = cls.getFrame1()
-        T1 = frame1.getTransformInGround(state)
+    parts_of = coupling_parts(model)
+    for name in names or parts_of:
+        ref, parts = parts_of[name]
+        T1 = ref.getTransformInGround(state)
         R1, p1 = rot_to_np(T1.R()), to_np(T1.p())
-        p_body = to_np(frame1.findBaseFrame().getTransformInGround(state).p())
-        M_g = T_g - np.cross(p1 - p_body, F_g)  # shift torque from body origin to coupling centre
+        F_g, M_g = np.zeros(3), np.zeros(3)
+        for f, k in parts:
+            rec = f.getRecordValues(state)
+            F_i = np.array([rec.get(k + i) for i in range(3)])
+            T_i = np.array([rec.get(k + i) for i in range(3, 6)])
+            if k == 0:
+                body = ref.findBaseFrame()
+            else:
+                hs = model.getComponent(f.getSocket("half_space").getConnecteePath())
+                body = osim.ContactGeometry.safeDownCast(hs).getFrame().findBaseFrame()
+            p_body = to_np(body.getTransformInGround(state).p())
+            F_g += F_i
+            M_g += T_i - np.cross(p1 - p_body, F_i)  # shift torque from body origin to coupling centre
         F, M = R1.T @ F_g, R1.T @ M_g
-        defl = to_np(cls.computeDeflection(state))  # [theta_x, theta_y, theta_z, dx, dy, dz]
         out[name] = {"F_ap": F[0], "F_axial": F[1], "F_ml": F[2], "M_ap": M[0], "M_axial": M[1],
                      "M_ml": M[2], "F_lat": _side_sign(name) * F[2], "F_radial": float(np.hypot(F[0], F[2])),
-                     "F_total": float(np.linalg.norm(F)), "deflection": defl}
+                     "F_total": float(np.linalg.norm(F)), "F_ground": F_g, "origin": p1, "axes": R1.T,
+                     "deflection": _deflection(model, state, name, parts)}
     return out
 
 

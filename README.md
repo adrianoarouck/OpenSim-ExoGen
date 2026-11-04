@@ -83,7 +83,7 @@ segments:
       - name: thigh_dist
         along_segment: 0.8
         model: nonlinear
-        stiffness_cubic: {anteroposterior: 2.0e6}               # N/m³
+        stiffness_cubic: {anteroposterior: 2.0e+6}               # N/m³
 joints:
   knee:
     misalignment: [0.0, 0.02, 0.0]          # exo axis 2 cm above the anatomical knee
@@ -147,9 +147,54 @@ touches the floor) or `plate_contact` (the human contact spheres push on a
 half-space on top of the plate, and the plate gets its own spheres against the
 floor, with the same parameters).
 
+### Cuff models
+
+`model` chooses how each cuff is modelled (set it in `cuff_defaults` or per cuff).
+The tissue stiffness/damping keys above are used by `linear`, `nonlinear`, `ring`
+and `sliding`; each model has its own block for the rest. Each option of the
+viewer's `model` menu shows the same explanation and references.
+
+| `model` | What it is | OpenSim elements | Sources |
+|---|---|---|---|
+| `linear` (default) | Kelvin-Voigt: 6-DOF spring ∥ damper between a limb point and an exo point; strap, skin and muscle lumped together | `BushingForce` | [1] calibrated in OpenSim, [2] default sagittal k/b, [3] best compromise of 32 models, [4] measured 6×6 stiffness |
+| `nonlinear` | linear + cubic stiffening per direction (`F = k·d + k3·d³`) or custom expressions | `ExpressionBasedBushingForce` | [3] spring terms up to 3rd order |
+| `ring` | two bodies in series: a ring body (the cuff's mass) held to the exo by a stiff **strap** spring-damper and to the limb by the **tissue** spring-damper; with damping it behaves like a standard linear solid (relaxation) | body `exo_<cuff>_ring` on a 6-DOF joint from the limb, bushings `<cuff>` (tissue) + `<cuff>_strap` | [5] straps as rigid bodies with soft links, [2] band + tissue springs |
+| `sliding` | the ring slides along the limb axis and twists about it against smooth Coulomb friction (µ·N·tanh(v/v_t)); the tissue spring-damper links the ring to a **fixed point of the exo**, so the force point stays on the exo and moves along the leg | ring on a `CustomJoint` (`<cuff>_slide`, `<cuff>_twist`), `ExpressionBasedCoordinateForce` friction, bushing `<cuff>` | [6] Coulomb friction at the interface (µ = 0.5), [7] ~10 mm cuff slippage measured |
+| `contact` | unilateral: rows of pads (spheres on the exo) press on planes tangent to the skin with compression-only Hertz contact, Hunt-Crossley damping and friction. The cuff can only push, so the strap acts by pulling the shell against the limb; `preload_force` is how tight the strap is; pads lift off, slide and tilt on their own; the shell side (`shell_arc`, centred on the bar) and the strap side have their own stiffness | `SmoothSphereHalfSpaceForce` `<cuff>_pad<row>_<k>` | [5] contact nodes with normal + Coulomb forces, [8] discretised straps with nonlinear contact, friction and strap tension, [6] unilateral normal force, [9] Hunt-Crossley |
+
+Notes:
+
+* The `ring` series combination and the `sliding` slide/twist joint are
+  compositions of the elements above, not a model calibrated as a whole in one
+  paper. Default values of the strap, friction and pads are engineering
+  estimates.
+* `sliding` uses smooth friction: under a constant axial load below µ·N the cuff
+  still creeps slowly (no true stick). Smaller `transition_velocity` creeps less
+  but integrates more slowly.
+* Cost: `ring` and `sliding` add 6 and 2 coordinates per cuff, and a light ring
+  between stiff springs is a fast mode (smaller integrator steps). `contact` adds
+  `rows × pads_around` contact forces per cuff (16 by default). In the tests, a
+  1 s forward simulation of `knee_right` takes ~1.5 s with `linear`, ~20 s with
+  `ring` and ~33 s with `contact`.
+* `weld` is not accepted for cuffs (a rigid cuff locks the limb to the exo); the
+  belt and the foot binding offer `linear`, `nonlinear` and `weld`.
+
+References:
+
+1. Serrancolí G, Falisse A, Dembia C, et al. Subject-exoskeleton contact model calibration leads to accurate interaction force predictions. *IEEE Trans Neural Syst Rehabil Eng.* 2019;27(8):1597-1605.
+2. Yan Y, Chen Z, Huang C, Guo Q. Modelling and analysis of coupling dynamics of swinging a lower limb exoskeleton. *Nonlinear Dyn.* 2023;111. [doi:10.1007/s11071-022-07876-8](https://doi.org/10.1007/s11071-022-07876-8)
+3. Sun M, Bačěk T, Kulić D, McGinley J, Oetomo D, Tan Y. Modelling physical human-robot interface with different users, cuffs, and strapping pressures: a case study. *ICORR* 2023. [doi:10.1109/ICORR58425.2023.10304754](https://doi.org/10.1109/ICORR58425.2023.10304754)
+4. Guitteny S, Lafon Y, Bonnet V, Aissaoui R, Dumas R. Dynamic estimation of soft tissue stiffness for use in modeling socket, orthosis or exoskeleton interfaces with lower limb segments. *J Biomech.* 2022;134:110987. [doi:10.1016/j.jbiomech.2022.110987](https://doi.org/10.1016/j.jbiomech.2022.110987)
+5. Zhang L, Liu Y, Wang R, Smith C, Gutierrez-Farewik EM. Modeling and simulation of a human knee exoskeleton's assistive strategies and interaction. *Front Neurorobot.* 2021;15:620928. [doi:10.3389/fnbot.2021.620928](https://doi.org/10.3389/fnbot.2021.620928)
+6. Chander DS, Cavatorta MP. Modelling friction at the mechanical interface between the human and the exoskeleton. *Int J Human Factors Model Simul.* 2019;7(2):119-136. [doi:10.1504/IJHFMS.2019.105434](https://doi.org/10.1504/IJHFMS.2019.105434)
+7. Akiyama Y, et al. Measurement of contact behavior including slippage of cuff when using wearable physical assistant robot. *IEEE Trans Neural Syst Rehabil Eng.* 2016;24(7):784-793. [doi:10.1109/TNSRE.2015.2464719](https://doi.org/10.1109/TNSRE.2015.2464719)
+8. Pascoletti G, Di Natali C, Caldwell DG, Sposito M, Bianconi F, Zanetti EM. The exoskeleton-human body system: a multibody model for fitting design analyses. *Int J Interact Des Manuf.* 2025. [doi:10.1007/s12008-025-02376-6](https://doi.org/10.1007/s12008-025-02376-6)
+9. Hunt KH, Crossley FRE. Coefficient of restitution interpreted as damping in vibroimpact. *J Appl Mech.* 1975;42(2):440-445.
+
 ### Interaction forces
 
-How the force arises: each coupling links a point on the limb to a point on the
+How the force arises (`linear` model; the others are described in
+[Cuff models](#cuff-models)): each coupling links a point on the limb to a point on the
 exo, coincident at the reference pose. When the exo moves or rotates relative to
 the limb, the spring-damper produces **F = −K·displacement − B·velocity** (and a
 moment **M = −Kr·θ − Br·ω**), expressed in the cuff directions. It acts at the
@@ -161,7 +206,9 @@ return, for each coupling, what the exo applies **on the human**, in the cuff
 frame: `F_ap` (anteroposterior), `F_axial` (longitudinal), `F_ml` (mediolateral),
 `M_ap`, `M_axial` (twist about the limb), `M_ml`, `F_lat` (+ lateral for that
 side), `F_radial` (√(F_ap²+F_ml²), perpendicular to the limb) and `F_total`, in N
-and N·m.
+and N·m. For `ring` it is the tissue bushing; for `sliding`, the tissue bushing in
+the frame of the ring (which slides and twists); for `contact`, the sum of the pad
+forces about the cuff centre.
 
 ### Exo kinematics from human kinematics
 
@@ -169,7 +216,10 @@ and N·m.
 minimise the elastic energy of the couplings with the human held fixed (the pose
 of a massless, unactuated exo). It writes a complete `.mot` (human + exo) for
 ID/SO, a Moco initial guess or force analysis. Replaces
-`legacy/scripts/IK_setup_virtual_marker.py`.
+`legacy/scripts/IK_setup_virtual_marker.py`. Friction is not an energy, so the fit
+assumes the cuffs do not slip: `sliding` cuffs keep their slide/twist values, and
+`contact` pads get a tangential no-slip term (their normal energy follows the
+OpenSim force law exactly).
 
 ## Moco
 
