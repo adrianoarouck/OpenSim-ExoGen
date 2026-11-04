@@ -175,6 +175,9 @@ Observações:
   acrescenta `rows × pads_around` forças de contato por cuff (16 por padrão). Nos
   testes, 1 s de simulação direta do `knee_right` leva ~1,5 s com `linear`, ~17 s
   com `ring` e ~8 s com `contact`.
+* O `contact` não tem rigidez axial nem de torção, só atrito, então o membro pode
+  deslizar dentro do cuff e as cargas diferem do `linear` (ex.: `full_bilateral`,
+  quadril 30°, joelho 60°: cuff da canela ~77 N em vez de ~115 N).
 * `weld` não é aceito em cuffs (um cuff rígido trava o membro no exo); o cinto e a
   amarração do pé oferecem `linear`, `nonlinear` e `weld`.
 
@@ -213,7 +216,8 @@ força do OpenSim; os termos cúbicos do `nonlinear` também entram na energia).
 [examples/moco_track_exo.py](examples/moco_track_exo.py): constrói o exo, ajusta a
 cinemática, roda `MocoTrack` (sem músculos, reservas só nas coordenadas humanas) e
 calcula as forças nos cuffs ao longo da solução. Testado: `hip_bilateral`,
-0,5–0,8 s, malha 0,05 s → *Optimal Solution Found* em ~60 s.
+0,5–0,8 s, malha 0,05 s → *Optimal Solution Found* em ~60 s. Com cuffs `ring`,
+`sliding` ou `contact` o mesmo problema ainda não converge (atinge 500 iterações do Ipopt).
 
 Observação sobre o `legacy/scripts/exampleMocoTrack.py`: a remoção de atuadores do exo usa
 `remove(qt)` com índice fixo (remove o item errado) e depois `track.setModel(modelProcessor)`
