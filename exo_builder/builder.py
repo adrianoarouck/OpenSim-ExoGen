@@ -27,7 +27,7 @@ from . import config as C
 from .geometry import (body_xyz_angles, box_inertia, combine, complete_basis, frame_from_y,
                        offset_frame, osim_inertia, ring_inertia, rod_inertia, unit, vec3)
 from .human import HumanLandmarks
-from .interaction import add_coupling, add_plate_contact
+from .interaction import RING_MODELS, add_coupling, add_cuff, add_plate_contact
 
 # 6-DOF root: (coordinate suffix, axis in the ground-side frame, rotational?)
 ROOT_DOFS = (("rz", (0, 0, 1), True), ("rx", (1, 0, 0), True), ("ry", (0, 1, 0), True),
@@ -195,6 +195,12 @@ class ExoBuilder:
                 self._cuffs(view, side, seg, body, human_body, human_jc)
         self._check_weld_loop(view, side, bodies)
 
+    @staticmethod
+    def _cuff_mass(spec):
+        """Mass of each cuff: together they take 20 % of the segment mass per cuff, at most 60 %."""
+        n = len(spec.get("cuffs", []))
+        return min(0.2 * n, 0.6) * spec["mass"] / n if n else 0.0
+
     def _bar_offset(self, view, side, seg):
         spec = view["segments"][seg]
         r = max(self.L.limb_radius(view, side, seg, a) for a in (0.0, 1.0))
@@ -208,10 +214,12 @@ class ExoBuilder:
         length = np.linalg.norm(origin - dist)
         axis = unit(origin - dist)
         cuffs = [C.cuff_spec(view, c) for c in spec.get("cuffs", [])]
-        cuff_mass = min(0.2 * len(cuffs), 0.6) * spec["mass"]
+        cuff_mass = self._cuff_mass(spec) * len(cuffs)
         parts = [(spec["mass"] - cuff_mass, bar_c, rod_inertia(spec["mass"] - cuff_mass, length, spec["bar_radius"], axis))]
         h_prox, h_dist = human_jc[PROXIMAL_JOINT[seg]], human_jc[DISTAL_JOINT[seg]]
         for c in cuffs:
+            if c["model"] in RING_MODELS:
+                continue  # this cuff's mass goes to its own ring body (see _cuffs)
             center = h_prox + c["along_segment"] * (h_dist - h_prox)
             r = self.L.limb_radius(view, side, seg, c["along_segment"]) if c["radius"] == "auto" else c["radius"]
             parts.append((cuff_mass / len(cuffs), center, ring_inertia(cuff_mass / len(cuffs), r, c["width"], axis)))
@@ -330,10 +338,16 @@ class ExoBuilder:
             c = C.cuff_spec(view, raw)
             name = f"{c.get('name') or f'{seg}_cuff{i}'}_{side}"
             center = prox + c["along_segment"] * (dist - prox) + R_seg @ np.asarray(c["offset"], dtype=float)
-            add_coupling(self, name, "cuff", side, seg, human_body, body, center, R_seg, c)
             r = self.L.limb_radius(view, side, seg, c["along_segment"]) if c["radius"] == "auto" else c["radius"]
-            self._geom(body, f"{name}_shell", osim.Cylinder(r + 0.004, c["width"] / 2), center, R_seg,
-                       self.colors[body.getName()], opacity)
+            shell_body = add_cuff(self, name, side, seg, human_body, body, center, R_seg, c, r,
+                                  self._cuff_mass(view["segments"][seg]))
+            shell = osim.Cylinder(r + 0.004, c["width"] / 2)
+            if shell_body is body:
+                self._geom(body, f"{name}_shell", shell, center, R_seg, self.colors[body.getName()], opacity)
+            else:  # ring body: its frame is the cuff frame, so the shell moves with the ring
+                shell.setColor(vec3(self.colors[body.getName()]))
+                shell.setOpacity(float(opacity))
+                shell_body.attachGeometry(shell)
             self.info["couplings"][-1].update({"along_segment": c["along_segment"], "radius": float(r), "width": c["width"]})
 
     def _foot_interaction(self, view, side, body, human_body):

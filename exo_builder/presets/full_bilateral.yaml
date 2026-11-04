@@ -36,12 +36,38 @@ cuff_defaults:                # applied to every cuff; each cuff may override an
   width: 0.07                 # m, cuff width along the limb
   radius: auto                # m, limb radius at the cuff, or auto
   offset: [0, 0, 0]           # m, extra shift of the cuff centre [anteroposterior, longitudinal, mediolateral]
-  model: linear               # linear (BushingForce) | nonlinear (+ cubic term, ExpressionBasedBushingForce)
+  model: linear               # linear | nonlinear | ring | sliding | contact (see README "Cuff models")
   stiffness_translational: {anteroposterior: 3283, longitudinal: 1000, mediolateral: 3283}   # N/m
   stiffness_rotational: {anteroposterior: 30, longitudinal: 5, mediolateral: 30}              # N.m/rad
   damping_translational: {anteroposterior: 367, longitudinal: 100, mediolateral: 367}         # N.s/m
   damping_rotational: {anteroposterior: 1.0, longitudinal: 0.2, mediolateral: 1.0}            # N.m.s/rad
   stiffness_cubic: {anteroposterior: 0, longitudinal: 0, mediolateral: 0}                     # N/m^3 (nonlinear: F = k*d + k3*d^3)
+  # The values above are the soft tissue (linear, nonlinear, and the tissue of ring/sliding).
+  ring:                       # model ring (and the ring of sliding)
+    mass: auto                # kg, or auto = the cuff's share of the segment mass
+    strap:                    # ring <-> exo, in series with the tissue
+      stiffness_translational: {anteroposterior: 50000, longitudinal: 50000, mediolateral: 50000}
+      stiffness_rotational: {anteroposterior: 500, longitudinal: 500, mediolateral: 500}
+      damping_translational: {anteroposterior: 50, longitudinal: 50, mediolateral: 50}
+      damping_rotational: {anteroposterior: 0.3, longitudinal: 0.3, mediolateral: 0.3}
+  sliding:                    # model sliding: slide/twist on the limb against friction
+    friction_coefficient: 0.5
+    normal_force: 50          # N, strap pressure on the limb; slip when |F_axial| > mu*N
+    transition_velocity: 0.005  # m/s (smooth Coulomb)
+    viscous_damping: 5        # N.s/m
+  contact:                    # model contact: compression-only pads with friction
+    pads_around: 8
+    rows: 2
+    pad_radius: 0.03          # m
+    shell_arc: 180            # deg of rigid shell, centred on the bar side; the rest is strap
+    stiffness_shell: 4.0e+4   # N/m^2 (defaults ~ as stiff as the linear cuff for small motions)
+    stiffness_strap: 1.5e+4   # N/m^2
+    preload_force: 3          # N per pad at the reference pose (strap tightness)
+    dissipation: 1.0          # s/m (Hunt-Crossley)
+    static_friction: 0.5
+    dynamic_friction: 0.4
+    viscous_friction: 0.0
+    transition_velocity: 0.01 # m/s
 
 segments:
   thigh:

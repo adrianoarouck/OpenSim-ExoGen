@@ -242,6 +242,14 @@ function input(type, value, onChange, attrs = {}) {
 const toHex = (c) => "#" + c.map((x) => Math.round(x * 255).toString(16).padStart(2, "0")).join("");
 const fromHex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
 
+// Explanation of a coupling model + its full references (config.MODEL_DOCS / REFERENCES).
+function modelDoc(name) {
+  const d = (state.meta.model_docs || {})[name];
+  if (!d) return name;
+  const refs = d[1].map((k) => `• ${state.meta.references[k]}`).join("\n");
+  return refs ? `${d[0]}\n\nReferences:\n${refs}` : d[0];
+}
+
 function helpIcon(key) {
   const doc = state.meta.docs[key];
   if (!doc) return null;
@@ -283,9 +291,20 @@ function renderValue(obj, key, path) {
     return field("sides", box);
   }
   if (ENUM_KEYS[key] && typeof v === "string") {
+    // cuffs (and cuff_defaults) offer more coupling models than the belt and the foot binding
+    const cuff = key === "model" && /(^|\.)cuff/.test(path);
     const sel = input("select", v, set);
-    for (const o of state.meta.enums[ENUM_KEYS[key]]) sel.add(new Option(o, o, false, o === v));
-    return field(key, sel);
+    for (const o of state.meta.enums[cuff ? "cuff_model" : ENUM_KEYS[key]]) {
+      const opt = new Option(o, o, false, o === v);
+      if (key === "model") opt.title = modelDoc(o);
+      sel.add(opt);
+    }
+    const row = field(key, sel);
+    if (key === "model") {
+      const h = row.querySelector(".help");
+      if (h) h.title = `${state.meta.docs.model[1]}\n\n${v}: ${modelDoc(v)}`;
+    }
+    return row;
   }
   if (typeof v === "boolean") return field(key, input("checkbox", v, set));
   if (typeof v === "number") return field(key, input("number", v, set, { step: "any" }));
