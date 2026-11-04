@@ -58,11 +58,11 @@ cuff_defaults:                # applied to every cuff; each cuff may override an
   contact:                    # model contact: compression-only pads with friction
     pads_around: 8
     rows: 2
-    pad_radius: 0.01          # m
+    pad_radius: 0.03          # m
     shell_arc: 180            # deg of rigid shell, centred on the bar side; the rest is strap
-    stiffness_shell: 2.0e+6    # N/m^2
-    stiffness_strap: 5.0e+5    # N/m^2
-    preload_force: 10         # N per pad at the reference pose (strap tightness)
+    stiffness_shell: 4.0e+4   # N/m^2 (defaults ~ as stiff as the linear cuff for small motions)
+    stiffness_strap: 1.5e+4   # N/m^2
+    preload_force: 3          # N per pad at the reference pose (strap tightness)
     dissipation: 1.0          # s/m (Hunt-Crossley)
     static_friction: 0.5
     dynamic_friction: 0.4

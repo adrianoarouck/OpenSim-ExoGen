@@ -167,15 +167,16 @@ Notes:
 * The `ring` series combination and the `sliding` slide/twist joint are
   compositions of the elements above, not a model calibrated as a whole in one
   paper. Default values of the strap, friction and pads are engineering
-  estimates.
+  estimates; the pads are tuned so that, for small motions, a `contact` cuff is
+  about as stiff as the default `linear` thigh cuff (~3.3 kN/m anteroposterior).
 * `sliding` uses smooth friction: under a constant axial load below µ·N the cuff
   still creeps slowly (no true stick). Smaller `transition_velocity` creeps less
   but integrates more slowly.
 * Cost: `ring` and `sliding` add 6 and 2 coordinates per cuff, and a light ring
   between stiff springs is a fast mode (smaller integrator steps). `contact` adds
   `rows × pads_around` contact forces per cuff (16 by default). In the tests, a
-  1 s forward simulation of `knee_right` takes ~1.5 s with `linear`, ~20 s with
-  `ring` and ~33 s with `contact`.
+  1 s forward simulation of `knee_right` takes ~1.5 s with `linear`, ~17 s with
+  `ring` and ~8 s with `contact`.
 * `weld` is not accepted for cuffs (a rigid cuff locks the limb to the exo); the
   belt and the foot binding offer `linear`, `nonlinear` and `weld`.
 
@@ -218,8 +219,9 @@ of a massless, unactuated exo). It writes a complete `.mot` (human + exo) for
 ID/SO, a Moco initial guess or force analysis. Replaces
 `legacy/scripts/IK_setup_virtual_marker.py`. Friction is not an energy, so the fit
 assumes the cuffs do not slip: `sliding` cuffs keep their slide/twist values, and
-`contact` pads get a tangential no-slip term (their normal energy follows the
-OpenSim force law exactly).
+`contact` pads get only a weak tangential term that keeps them from drifting
+(their normal energy follows the OpenSim force law; cubic terms of `nonlinear`
+couplings enter the energy too).
 
 ## Moco
 

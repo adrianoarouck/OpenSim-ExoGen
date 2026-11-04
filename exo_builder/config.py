@@ -97,8 +97,10 @@ DEFAULTS = {
         },
         "sliding": {"friction_coefficient": 0.5, "normal_force": 50.0,
                     "transition_velocity": 0.005, "viscous_damping": 5.0},
-        "contact": {"pads_around": 8, "rows": 2, "pad_radius": 0.01, "shell_arc": 180.0,
-                    "stiffness_shell": 2.0e6, "stiffness_strap": 5.0e5, "preload_force": 10.0,
+        # contact: pads tuned so that, for small motions, the cuff is about as stiff as the
+        # default linear thigh cuff (k_ap ~ 3.3 kN/m) instead of several times stiffer.
+        "contact": {"pads_around": 8, "rows": 2, "pad_radius": 0.03, "shell_arc": 180.0,
+                    "stiffness_shell": 4.0e4, "stiffness_strap": 1.5e4, "preload_force": 3.0,
                     "dissipation": 1.0, "static_friction": 0.5, "dynamic_friction": 0.4,
                     "viscous_friction": 0.0, "transition_velocity": 0.01},
     },
@@ -334,6 +336,17 @@ class ConfigError(ValueError):
     pass
 
 
+class _Loader(yaml.SafeLoader):
+    """SafeLoader that also reads YAML 1.2 floats such as 2.0e6 or 1e5 (PyYAML's YAML 1.1
+    resolver needs a sign and a dot, 2.0e+6, and silently returns the string otherwise)."""
+
+
+_Loader.add_implicit_resolver(
+    "tag:yaml.org,2002:float",
+    re.compile(r"^[-+]?(?:[0-9][0-9_]*)?(?:\.[0-9_]*)?[eE][-+]?[0-9]+$"),
+    list("-+0123456789."))
+
+
 def migrate(obj):
     """Rename legacy keys recursively (returns a new object)."""
     if isinstance(obj, list):
@@ -371,7 +384,7 @@ def load_config(source=None):
         if not path.exists() and (PRESET_DIR / f"{path}.yaml").exists():
             path = PRESET_DIR / f"{path}.yaml"
         with open(path, "r", encoding="utf-8") as f:
-            user = yaml.safe_load(f) or {}
+            user = yaml.load(f, Loader=_Loader) or {}
     user = migrate(user)
     if isinstance(user.get("pelvis_unit", {}).get("attach", {}).get("model"), str) and \
             user["pelvis_unit"]["attach"]["model"] == "bushing":
@@ -464,6 +477,11 @@ def _positive(where, d, keys, errors, strict=True):
 
 def _check_cuff_model(where, model, c, errors):
     """Parameters of the model-specific blocks (only the chosen model is checked)."""
+    defaults = DEFAULTS["cuff_defaults"]
+    for block in {"ring": ("ring",), "sliding": ("ring", "sliding"), "contact": ("contact",)}.get(model, ()):
+        unknown = set(c.get(block, {})) - set(defaults[block])
+        if unknown:
+            errors.append(f"{where}.{block}: unknown keys {sorted(unknown)}; allowed: {sorted(defaults[block])}")
     if model == "ring":
         r = c.get("ring", {})
         if r.get("mass") != "auto":

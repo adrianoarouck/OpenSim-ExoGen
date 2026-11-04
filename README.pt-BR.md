@@ -164,15 +164,17 @@ Observações:
 * A combinação em série do `ring` e a junta de deslizamento/giro do `sliding` são
   composições dos elementos acima, não um modelo calibrado como um todo em um
   artigo. Os valores padrão da cinta, do atrito e dos pads são estimativas de
-  engenharia.
+  engenharia; os pads foram ajustados para que, em movimentos pequenos, um cuff
+  `contact` seja quase tão rígido quanto o cuff `linear` padrão da coxa (~3,3 kN/m
+  anteroposterior).
 * O `sliding` usa atrito suave: com uma carga axial constante abaixo de µ·N o cuff
   ainda escorrega devagar (não há aderência perfeita). `transition_velocity` menor
   escorrega menos, mas integra mais devagar.
 * Custo: `ring` e `sliding` acrescentam 6 e 2 coordenadas por cuff, e um anel leve
   entre molas rígidas é um modo rápido (passos de integração menores). `contact`
   acrescenta `rows × pads_around` forças de contato por cuff (16 por padrão). Nos
-  testes, 1 s de simulação direta do `knee_right` leva ~1,5 s com `linear`, ~20 s
-  com `ring` e ~33 s com `contact`.
+  testes, 1 s de simulação direta do `knee_right` leva ~1,5 s com `linear`, ~17 s
+  com `ring` e ~8 s com `contact`.
 * `weld` não é aceito em cuffs (um cuff rígido trava o membro no exo); o cinto e a
   amarração do pé oferecem `linear`, `nonlinear` e `weld`.
 
@@ -202,9 +204,9 @@ minimizam a energia elástica dos acoplamentos com o humano fixo (pose de um exo
 sem massa e sem atuação). Gera um `.mot` completo (humano + exo) para ID/SO, guess
 do Moco ou análise de forças. Substitui o `legacy/scripts/IK_setup_virtual_marker.py`.
 Atrito não é energia, então o ajuste supõe que os cuffs não escorregam: cuffs
-`sliding` mantêm os valores de deslizamento/giro, e os pads do `contact` ganham um
-termo tangencial sem escorregamento (a energia normal segue exatamente a lei de
-força do OpenSim).
+`sliding` mantêm os valores de deslizamento/giro, e os pads do `contact` ganham só
+um termo tangencial fraco que os impede de derivar (a energia normal segue a lei de
+força do OpenSim; os termos cúbicos do `nonlinear` também entram na energia).
 
 ## Moco
 
