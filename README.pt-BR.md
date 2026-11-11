@@ -100,6 +100,28 @@ pelos cuffs. DOFs: `enabled` (senão é travado), `actuated` (cria `tau_exo_*`, 
 (mola/amortecedor torsional na junta), `limits: clamp | soft | none`. O eixo padrão (`axis: human`) é o da
 coordenada humana correspondente, então ângulo positivo do exo = do humano.
 
+### Tamanho do humano
+
+`human.size` escala o modelo humano antes de o exo ser ajustado a ele, então barras,
+raios dos cuffs e centros das juntas acompanham:
+
+```yaml
+human:
+  size: {height: 1.87, hip_width: 0.387, mass: 110.7}   # vazio / null = como o modelo é
+```
+
+Cada corpo é escalado no eixo Y (ao longo do segmento) por altura / altura do modelo
+e em X e Z (circunferência) por hip_width / largura do quadril do modelo; o
+comprimento do pé segue a altura. As massas dos segmentos mantêm a distribuição e
+somam `mass`. A estatura do próprio modelo é estimada pela altura do quadril
+(quadril = 0,530 × estatura, Drillis & Contini via Winter); a largura do quadril é a
+distância entre os centros do quadril mais os dois raios da coxa. O visualizador tem
+botões 5% / 50% / 95%: homens do levantamento ANSUR II do Exército dos EUA (2012),
+estatura 1,648 / 1,755 / 1,870 m, largura do quadril 0,308 / 0,344 / 0,387 m, massa
+64,4 / 84,6 / 110,7 kg. Cada valor é o percentil daquela medida isolada, então juntos
+descrevem alguém baixo e magro, alguém mediano e alguém alto e pesado, não pessoas
+exatas.
+
 ## Interface humano–exo
 
 Cada acoplamento é um par de frames coincidentes na pose default (pré-carga zero),
@@ -233,7 +255,10 @@ gerado da config: qualquer chave nova do YAML aparece sozinha; reconstrói ao ed
 **Forças** (tabela). Poses prontas na aba Pose: em pé, sentado, agachamento, meio
 agachamento e subindo degrau; com “pés no chão” a altura da pelve é ajustada para o
 contato mais baixo do pé tocar o chão. Cada campo mostra a unidade e um “?” com a
-explicação. As setas de força têm a ponta no centro do cuff (onde a força age),
+explicação. Uma caixa “Human size” no topo define estatura, largura do quadril e
+massa (com presets 5% / 50% / 95%), e cada acoplamento só mostra os parâmetros do
+modelo selecionado (ex.: `stiffness_cubic` com `nonlinear`, `ring`, `sliding`; os
+pads com `contact`). As setas de força têm a ponta no centro do cuff (onde a força age),
 aparecem por cima da malha, com o valor em N; dá para ver a resultante ou as
 componentes nos eixos do cuff, e alternar entre a força no humano e a reação no exo. Salva YAML e exporta `.osim` (construído no modelo original,
 com músculos). Three.js vem do jsdelivr (precisa de internet no navegador).

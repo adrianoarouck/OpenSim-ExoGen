@@ -166,3 +166,63 @@ class HumanLandmarks:
             x0, x1, z0, z1 = xa - 0.07, xa + 0.19, za - 0.045, za + 0.045
         center = self.anterior * (x0 + x1) / 2 + self.right * (z0 + z1) / 2 + self.up * sole
         return {"center": center, "length": x1 - x0, "width": z1 - z0, "sole": sole}
+
+
+# ---------------------------------------------------------------- size
+# Greater trochanter (~ hip joint) height / stature, from Drillis & Contini's segment
+# proportions as given by Winter, Biomechanics and Motor Control of Human Movement.
+HIP_HEIGHT_RATIO = 0.530
+
+
+def reference_size(L, cfg):
+    """Size of the model as it is: stature estimated from the hip height above the sole,
+    hip width = distance between the hip centres + the two proximal thigh radii, total mass."""
+    from .config import side_view  # local import: config does not depend on opensim
+    views = {s: side_view(cfg, s) for s in ("r", "l")}
+    hip = {s: L.joint_center(views[s]["human"]["joints"]["hip"]) for s in views}
+    sole = min(L.foot_footprint(views[s], s)["sole"] for s in views)
+    hip_height = np.mean([np.dot(hip[s], L.up) for s in views]) - sole
+    hip_width = abs(np.dot(hip["r"] - hip["l"], L.right)) + \
+        sum(L.limb_radius(views[s], s, "thigh", 0.0) for s in views)
+    mass = sum(b.getMass() for b in L.model.getBodySet())
+    return {"height": float(hip_height / HIP_HEIGHT_RATIO), "hip_width": float(hip_width), "mass": float(mass)}
+
+
+def scale_human(model, cfg):
+    """Scale the human to ``cfg['human']['size']`` (height, hip_width, mass; None = keep).
+
+    Every body is scaled by height/reference along its Y axis (along the segments in
+    Rajagopal-type models) and by hip_width/reference along X and Z (girth); the feet
+    use the height factor for their length (X) too. Masses keep their distribution and
+    add up to ``mass``. The pelvis translation defaults are scaled with the height so
+    the feet stay at the same level. Returns {"reference", "size", "factors"}.
+    """
+    from .config import fill_side
+    L = HumanLandmarks(model, cfg)
+    ref = reference_size(L, cfg)
+    want = cfg["human"].get("size") or {}
+    size = {k: float(want[k]) if want.get(k) is not None else ref[k] for k in ref}
+    s_h, s_w = size["height"] / ref["height"], size["hip_width"] / ref["hip_width"]
+    out = {"reference": ref, "size": size, "factors": {"height": s_h, "width": s_w}}
+    if abs(s_h - 1) < 1e-9 and abs(s_w - 1) < 1e-9 and abs(size["mass"] - ref["mass"]) < 1e-9:
+        return out
+    feet = {fill_side(cfg["human"]["bodies"][k], s) for k in ("foot", "toes") if cfg["human"]["bodies"].get(k)
+            for s in ("r", "l")}
+    scales = osim.ScaleSet()
+    for b in model.getBodySet():
+        sc = osim.Scale()
+        sc.setSegmentName(b.getName())
+        sc.setScaleFactors(osim.Vec3(s_h if b.getName() in feet else s_w, s_h, s_w))
+        sc.setApply(True)
+        scales.cloneAndAppend(sc)
+    state = model.initSystem()
+    model.scale(state, scales, True, size["mass"])
+    pelvis = L.body(cfg["human"]["pelvis"])
+    for j in model.getJointSet():
+        if j.getChildFrame().findBaseFrame().getName() != pelvis.getName():
+            continue
+        for i in range(j.numCoordinates()):
+            c = j.upd_coordinates(i)
+            if c.getMotionType() == 2:  # translational
+                c.setDefaultValue(c.getDefaultValue() * s_h)
+    return out

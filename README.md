@@ -102,6 +102,27 @@ DOFs: `enabled` (otherwise locked), `actuated` (creates `tau_exo_*`, a
 `limits: clamp | soft | none`. The default axis (`axis: human`) is the one of the
 matching human coordinate, so a positive exo angle equals a positive human angle.
 
+### Human size
+
+`human.size` scales the human model before the exo is fitted to it, so the bars,
+cuff radii and joint centres follow:
+
+```yaml
+human:
+  size: {height: 1.87, hip_width: 0.387, mass: 110.7}   # empty / null = as the model is
+```
+
+Every body is scaled along its Y axis (along the segment) by height / model height
+and along X and Z (girth) by hip_width / model hip width; the foot length follows the
+height. Segment masses keep their distribution and add up to `mass`. The model's own
+stature is estimated from its hip height (hip = 0.530 × stature, Drillis & Contini as
+given by Winter); its hip width is the distance between the hip centres plus the two
+thigh radii. The viewer has 5% / 50% / 95% buttons: men of the US Army ANSUR II survey
+(2012), stature 1.648 / 1.755 / 1.870 m, hip breadth 0.308 / 0.344 / 0.387 m, mass
+64.4 / 84.6 / 110.7 kg. Each value is the percentile of that dimension alone, so
+together they describe a small-and-light, a median and a tall-and-heavy subject, not
+exact people.
+
 ## Human–exo interface
 
 Each coupling is a pair of frames that coincide at the default pose (zero preload),
@@ -249,7 +270,10 @@ automatically), **Motion** (loads a `.mot`, fits and animates it, with a plot pe
 coupling) and **Forces** (table). Ready-made poses in the Pose tab: standing,
 sitting, squat, half squat and step-up; with "feet on the floor" the pelvis height
 is adjusted so the lowest foot contact touches the floor. Every field shows its
-unit and a "?" with an explanation. Force arrows have their tip at the cuff centre
+unit and a "?" with an explanation. A "Human size" box at the top sets stature, hip
+width and mass (with 5% / 50% / 95% presets), and each coupling only shows the
+parameters of the model selected for it (e.g. `stiffness_cubic` with `nonlinear`,
+`ring`, `sliding`; the pads with `contact`). Force arrows have their tip at the cuff centre
 (where the force acts), are drawn on top of the meshes and labelled in N; you can
 show the resultant or the components in the cuff axes, and switch between the
 force on the human and the reaction on the exo. It saves YAML and exports `.osim`

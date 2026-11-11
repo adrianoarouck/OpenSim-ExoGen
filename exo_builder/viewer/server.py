@@ -290,6 +290,7 @@ def make_handler(session):
                     "enums": {"mode": C.FOOT_MODES, "model": C.COUPLING_MODELS, "cuff_model": C.CUFF_MODELS,
                               "limits": C.LIMIT_MODES},
                     "docs": C.PARAM_DOCS, "model_docs": C.MODEL_DOCS, "references": C.REFERENCES, "poses": list(POSES),
+                    "human_presets": C.HUMAN_SIZE_PRESETS,
                     "model": session.human_path})
             if url.path == "/api/mesh":
                 name = parse_qs(url.query).get("file", [""])[0]

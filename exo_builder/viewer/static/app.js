@@ -224,6 +224,8 @@ async function rebuild() {
     state.scene = scene;
     await buildScene(scene);
     renderSliders(scene.coordinates);
+    state.scene = scene;
+    updateSizeBox();
     const i = scene.info;
     setStatus(`exo ${i.exo_mass.toFixed(2)} kg · ${i.coordinates.length} coords · ${i.couplings.length} couplings`);
     if (i.warnings.length) showError("Warnings:\n" + i.warnings.join("\n"));
@@ -273,7 +275,27 @@ function field(key, el) {
   return row;
 }
 
-function renderValue(obj, key, path) {
+// Parameters a coupling model does not use are hidden (the values stay in the config).
+const UNUSED_BY_MODEL = {
+  linear: ["stiffness_cubic", "expressions", "ring", "sliding", "contact"],
+  nonlinear: ["ring", "sliding", "contact"],
+  ring: ["sliding", "contact"],                 // tissue (cubic too) + strap in series
+  sliding: ["contact", "strap"],                // tissue + friction; the ring keeps only its mass
+  contact: ["stiffness_translational", "stiffness_rotational", "damping_translational",
+    "damping_rotational", "stiffness_cubic", "expressions", "ring", "sliding"],
+  weld: ["stiffness_translational", "stiffness_rotational", "damping_translational",
+    "damping_rotational", "stiffness_cubic", "expressions"],
+};
+const isCuffPath = (path) => /(^|\.)cuff/.test(path);
+// Model in force for the object at ``path``: its own, the cuff default for a cuff, or the parent's.
+function effectiveModel(obj, path, parentModel) {
+  if (typeof obj.model === "string") return obj.model;
+  if (/\.cuffs\[\d+\]$/.test(path)) return state.config.cuff_defaults.model || "linear";
+  return parentModel;
+}
+const isHidden = (model, key) => !!model && (UNUSED_BY_MODEL[model] || []).includes(key);
+
+function renderValue(obj, key, path, model) {
   const v = obj[key];
   const set = (nv) => { obj[key] = nv; scheduleRebuild(); };
   if (key === "sides") {
@@ -292,8 +314,9 @@ function renderValue(obj, key, path) {
   }
   if (ENUM_KEYS[key] && typeof v === "string") {
     // cuffs (and cuff_defaults) offer more coupling models than the belt and the foot binding
-    const cuff = key === "model" && /(^|\.)cuff/.test(path);
-    const sel = input("select", v, set);
+    const cuff = key === "model" && isCuffPath(path);
+    // a new model shows other parameters: redraw the form
+    const sel = input("select", v, key === "model" ? (nv) => { set(nv); renderForm(); } : set);
     for (const o of state.meta.enums[cuff ? "cuff_model" : ENUM_KEYS[key]]) {
       const opt = new Option(o, o, false, o === v);
       if (key === "model") opt.title = modelDoc(o);
@@ -323,7 +346,7 @@ function renderValue(obj, key, path) {
   if (Array.isArray(v)) return renderList(obj, key, path);
   if (v && typeof v === "object") {
     if (key === "overrides" || key === "expressions") return renderJson(obj, key);
-    return renderObject(v, key, path, ["segments", "joints", "pelvis_unit"].includes(path.split(".")[0]) && path.split(".").length <= 2);
+    return renderObject(v, key, path, ["segments", "joints", "pelvis_unit"].includes(path.split(".")[0]) && path.split(".").length <= 2, model);
   }
   return field(key, document.createTextNode(String(v)));
 }
@@ -334,7 +357,8 @@ function parseAxis(text) {
   return nums.length === 3 && nums.every(Number.isFinite) ? nums : "human";
 }
 
-function renderObject(obj, title, path, open = false) {
+function renderObject(obj, title, path, open = false, parentModel = undefined) {
+  const model = effectiveModel(obj, path, parentModel);
   const d = document.createElement("details");
   d.open = open;
   const s = document.createElement("summary");
@@ -346,7 +370,10 @@ function renderObject(obj, title, path, open = false) {
     s.append(helpIcon(title));
   }
   d.append(s);
-  for (const k of Object.keys(obj)) d.append(renderValue(obj, k, path ? `${path}.${k}` : k));
+  for (const k of Object.keys(obj)) {
+    if (isHidden(model, k) || (path === "human" && k === "size")) continue;  // size: box at the top
+    d.append(renderValue(obj, k, path ? `${path}.${k}` : k, model));
+  }
   return d;
 }
 
@@ -385,7 +412,8 @@ function renderList(obj, key, path) {
 
 // Cuffs only list what they override; offer the remaining cuff_defaults keys on demand.
 function addMissingCuffKeys(item, container) {
-  const missing = Object.keys(state.config.cuff_defaults).filter((k) => !(k in item));
+  const model = item.model || state.config.cuff_defaults.model || "linear";
+  const missing = Object.keys(state.config.cuff_defaults).filter((k) => !(k in item) && !isHidden(model, k));
   if (!missing.length) return;
   const sel = document.createElement("select");
   sel.add(new Option("+ override parameter…", ""));
@@ -408,6 +436,64 @@ function renderJson(obj, key) {
   return field(key, ta);
 }
 
+// Human size: plain numbers (empty = as the model is) + ANSUR II percentile presets.
+const SIZE_FIELDS = [["height", "m", "stature"], ["hip_width", "m", "hip width"], ["mass", "kg", "body mass"]];
+function renderSizeBox() {
+  const c = state.config;
+  c.human.size = c.human.size || {};
+  const size = c.human.size;
+  const box = document.createElement("fieldset");
+  box.className = "sizebox";
+  box.append(Object.assign(document.createElement("legend"), {
+    textContent: "Human size", title: state.meta.docs.size ? state.meta.docs.size[1] : "" }));
+  for (const [k, unit, label] of SIZE_FIELDS) {
+    const el = input("number", size[k] ?? "", (nv) => {
+      size[k] = Number.isFinite(nv) && nv > 0 ? nv : null;
+      scheduleRebuild();
+    }, { step: "any", min: 0, id: `size_${k}` });
+    const row = document.createElement("div");
+    row.className = "field";
+    const l = document.createElement("label");
+    l.textContent = label;
+    l.append(Object.assign(document.createElement("span"), { className: "unit", textContent: `[${unit}]` }));
+    const doc = state.meta.docs[k];
+    l.title = k === "mass" ? "Total body mass; the segment masses keep their distribution." : doc ? doc[1] : label;
+    row.append(l, el);
+    box.append(row);
+  }
+  const bar = document.createElement("div");
+  bar.className = "presets";
+  for (const [name, p] of Object.entries(state.meta.human_presets || {})) {
+    const b = document.createElement("button");
+    b.className = "small";
+    b.textContent = name;
+    b.title = `${name} percentile man (ANSUR II): ${p.height} m, hip ${p.hip_width} m, ${p.mass} kg`;
+    b.onclick = () => { Object.assign(size, p); renderForm(); scheduleRebuild(); };
+    bar.append(b);
+  }
+  const reset = document.createElement("button");
+  reset.className = "small";
+  reset.textContent = "model";
+  reset.title = "Keep the model's own size";
+  reset.onclick = () => { for (const [k] of SIZE_FIELDS) size[k] = null; renderForm(); scheduleRebuild(); };
+  bar.append(reset);
+  const note = Object.assign(document.createElement("div"), { className: "sizenote", id: "sizeNote" });
+  box.append(bar, note);
+  return box;
+}
+// Empty fields show the model's own size; the note gives the scale factors of the last build.
+function updateSizeBox() {
+  const hs = state.scene && state.scene.info.human_size;
+  if (!hs) return;
+  for (const [k] of SIZE_FIELDS) {
+    const el = $(`size_${k}`);
+    if (el) el.placeholder = hs.reference[k].toFixed(k === "mass" ? 1 : 3);
+  }
+  const note = $("sizeNote");
+  if (note) note.textContent = `model: ${hs.reference.height.toFixed(3)} m, hip ${hs.reference.hip_width.toFixed(3)} m, `
+    + `${hs.reference.mass.toFixed(1)} kg · scale ×${hs.factors.height.toFixed(3)} length, ×${hs.factors.width.toFixed(3)} girth`;
+}
+
 function renderForm() {
   const form = $("form");
   const openPaths = new Set([...form.querySelectorAll("details[open] > summary")].map((s) => s.textContent));
@@ -415,6 +501,8 @@ function renderForm() {
   const c = state.config;
   form.append(field("name", input("text", c.name, (v) => { c.name = v; })));
   form.append(renderValue(c, "sides", "sides"));
+  form.append(renderSizeBox());
+  updateSizeBox();
   for (const k of ["segments", "joints", "pelvis_unit", "cuff_defaults", "appearance", "human", "overrides"]) {
     form.append(renderValue(c, k, k));
   }
@@ -561,6 +649,8 @@ document.querySelectorAll("#tabs button").forEach((b) => b.onclick = () => {
     renderForm();
     await buildScene(scene);
     renderSliders(scene.coordinates);
+    state.scene = scene;
+    updateSizeBox();
     const i = scene.info;
     setStatus(`exo ${i.exo_mass.toFixed(2)} kg · ${i.coordinates.length} coords · ${i.couplings.length} couplings`);
   } catch (e) { showError(e); setStatus("error"); }
