@@ -53,6 +53,8 @@ DEFAULTS = {
         "floor": "floor",
         "radius_ratio": {"thigh": [0.20, 0.13], "shank": [0.12, 0.07]},
         "use_markers": True,
+        # Scale the human model before adding the exo; null = keep the model's value.
+        "size": {"height": None, "hip_width": None, "mass": None},
     },
     "appearance": {"color_r": [0.0, 0.8, 0.8], "color_l": [0.8, 0.0, 0.8],
                    "color_pelvis": [1.0, 0.85, 0.0], "cuff_opacity": 0.35},
@@ -167,6 +169,17 @@ DEFAULTS = {
     "overrides": {},
 }
 
+# Body size presets (men, ANSUR II 2012 US Army survey, each dimension at its own
+# percentile, as read from the ANSUR II data explorer at ergoassessment.cam): stature,
+# standing hip breadth (across the buttocks) and body mass. A "5th percentile man" built
+# this way is short, narrow and light; real people are rarely at the same percentile in
+# every dimension.
+HUMAN_SIZE_PRESETS = {
+    "5%": {"height": 1.648, "hip_width": 0.308, "mass": 64.4},
+    "50%": {"height": 1.755, "hip_width": 0.344, "mass": 84.6},
+    "95%": {"height": 1.870, "hip_width": 0.387, "mass": 110.7},
+}
+
 DOF_DEFAULTS = {"enabled": True, "actuated": False, "max_torque": 50.0, "range": [-90.0, 90.0],
                 "default": 0.0, "limits": "clamp", "limit_stiffness": 20.0, "limit_damping": 0.05,
                 "passive_stiffness": 0.0, "passive_damping": 0.0, "human_coord": None, "axis": "human"}
@@ -256,6 +269,9 @@ PARAM_DOCS = {
     "color_pelvis": ("", "Belt/backpack colour."), "cuff_opacity": ("0-1", "Cuff opacity."),
     "radius_ratio": ("fraction", "Limb radius / segment length [proximal, distal] when there are no markers."),
     "use_markers": ("", "Use knee/ankle markers to estimate the limb radius."),
+    "size": ("", "Human body size. The model is scaled before the exo is added; empty = as the model is. Presets: 5th, 50th and 95th percentile men (ANSUR II)."),
+    "height": ("m", "Stature. The model's own stature is estimated from its hip height (hip = 0.530 × stature)."),
+    "hip_width": ("m", "Hip width across the buttocks; scales the girth (X and Z) of every body."),
 }
 
 # References cited by MODEL_DOCS (shown in the viewer tooltips and the README).
@@ -563,6 +579,14 @@ def validate(cfg):
                     errors.append(f"{where}.max_torque must be > 0 when actuated")
                 if d["axis"] != "human" and (not isinstance(d["axis"], list) or len(d["axis"]) != 3):
                     errors.append(f"{where}.axis must be 'human' or [x, y, z]")
+    size = cfg.get("human", {}).get("size") or {}
+    for key in ("height", "hip_width", "mass"):
+        v = size.get(key)
+        if v is not None and (not isinstance(v, (int, float)) or isinstance(v, bool) or v <= 0):
+            errors.append(f"human.size.{key} must be a number > 0 or null (got {v!r})")
+    unknown = set(size) - {"height", "hip_width", "mass"}
+    if unknown:
+        errors.append(f"human.size: unknown keys {sorted(unknown)}")
     if errors:
         raise ConfigError("Invalid exo configuration:\n  - " + "\n  - ".join(dict.fromkeys(errors)))
     return True

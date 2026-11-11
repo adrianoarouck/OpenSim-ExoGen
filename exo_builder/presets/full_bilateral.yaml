@@ -18,6 +18,7 @@ human:                        # names in the human .osim model
   floor: floor                # ContactHalfSpace used by the foot contact spheres
   radius_ratio: {thigh: [0.20, 0.13], shank: [0.12, 0.07]}   # limb radius / segment length [proximal, distal]
   use_markers: true           # refine limb radius with knee/ankle markers when present
+  size: {height: null, hip_width: null, mass: null}   # m, m, kg; null = as the model is (5%/50%/95% presets in the viewer)
 
 pelvis_unit:                  # belt + backpack; enabled: false for exos without a belt
   enabled: true

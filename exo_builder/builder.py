@@ -26,7 +26,7 @@ import opensim as osim
 from . import config as C
 from .geometry import (body_xyz_angles, box_inertia, combine, complete_basis, frame_from_y,
                        offset_frame, osim_inertia, ring_inertia, rod_inertia, unit, vec3)
-from .human import HumanLandmarks
+from .human import HumanLandmarks, scale_human
 from .interaction import RING_MODELS, add_coupling, add_cuff, add_plate_contact
 
 # 6-DOF root: (coordinate suffix, axis in the ground-side frame, rotational?)
@@ -47,6 +47,7 @@ class ExoBuilder:
 
     # ------------------------------------------------------------------ API
     def build(self):
+        self.info["human_size"] = scale_human(self.model, self.cfg)
         # Snapshot of the human at its default pose; the System is invalid from here on.
         self.L = HumanLandmarks(self.model, self.cfg)
         self.R0 = self.L.R0
