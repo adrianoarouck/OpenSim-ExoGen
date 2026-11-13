@@ -23,27 +23,103 @@ data/walking/       gait data: MARKERS (.trc), MOCAP-IK (.mot), FORCE-MOT, SETUP
 legacy/             scripts, models, setups and outputs of the old workflow (see legacy/README.md)
 ```
 
-Run the commands below from the project root.
+## Installation
 
-Target environment: conda `opensim46` (OpenSim 4.6, Python 3.11). Extra
-dependencies: `pip install pyyaml pytest` (numpy, scipy and matplotlib come with
-the environment).
+### Requirements
 
-> **Golden rule:** the first import of any script must be `import exo_builder`.
+| Package | Needed for | Tested with |
+|---|---|---|
+| Python | everything | 3.11 (Windows, conda) and 3.13 (Linux) |
+| [OpenSim](https://opensim.stanford.edu/) Python bindings (`opensim`, includes Moco) | everything | 4.6; the API contract tests also pass on 4.5 |
+| numpy | everything | 2.5.3 |
+| scipy | `fit` (exo kinematics, `scipy.optimize`) | 1.18.1 |
+| PyYAML | reading/writing exo configs | 6.0.3 |
+| matplotlib | `forces --plot` only | 3.11.2 |
+| pytest | running the tests | 9.2.0 |
+
+The "tested with" versions are the ones of the last full test run (66 tests, Linux,
+Python 3.13, `opensim` 4.6 wheel from PyPI). On Windows the project is developed in a
+conda environment with OpenSim 4.6 and Python 3.11. The package declares
+`requires-python >= 3.9` and no upper bounds; OpenSim 4.6 is the reference version.
+
+The viewer needs no extra Python package (it uses the standard library HTTP server).
+The browser page loads [three.js](https://threejs.org/) 0.160.0 from the jsdelivr CDN,
+so the browser needs internet access.
+
+### Recommended environment: conda
+
+OpenSim's Python bindings are distributed on the `opensim-org` conda channel. This is
+the setup the project is developed with:
+
+```bash
+conda create -n opensim46 python=3.11
+conda activate opensim46
+conda install -c opensim-org opensim=4.6
+
+git clone https://github.com/adrianoarouck/OpenSim-ExoGen.git
+cd OpenSim-ExoGen
+pip install -e ".[test]"                        # exo_builder + scipy, pyyaml, matplotlib, pytest
+```
+
+`pip install -e .` installs the package in editable mode and adds the `exo-builder`
+command (same as `python -m exo_builder`). Installing is optional: every command below
+also works from the project root without it, as long as the dependencies are present.
+
+Check the installation:
+
+```bash
+python -c "import exo_builder, opensim; print(opensim.GetVersionAndDate())"
+python -m pytest            # ~1-2 min
+```
+
+On Windows, if another OpenSim install is on the system `PATH` or Moco fails to find
+Ipopt, read [Environment issues](#environment-issues).
+
+### Alternative: pip only (Linux)
+
+There is also an `opensim` 4.6 wheel on PyPI. It is what the automated test runs use,
+on Linux x86_64 (Moco included):
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install opensim==4.6
+pip install -e ".[test]"
+```
+
+### Golden rule
+
+> The first import of any script must be `import exo_builder`.
 > On Windows with OpenSim 4.6 it works around three DLL conflicts that crash the
 > process or Moco (see [Environment issues](#environment-issues)).
 
-## Quick start
+## Usage
+
+Run the commands below from the project root (the default paths point to `models/`
+and `data/`). `python -m exo_builder` and `exo-builder` are the same command.
+
+### Command line
 
 ```bash
-python -m exo_builder presets
+python -m exo_builder presets                                    # list bundled presets
 python -m exo_builder build hip_bilateral --model models/subject_walk_contact.osim -o subject_hip_exo.osim
 python -m exo_builder fit subject_hip_exo.osim data/walking/MOCAP-IK/walking1.mot -o walking1_exo.mot
 python -m exo_builder forces subject_hip_exo.osim walking1_exo.mot -o walking1_cuffs.sto --plot cuffs.png
-python -m exo_builder.viewer --model models/subject_walk_contact.osim --config full_bilateral
 ```
 
-From Python:
+| Command | What it does | Options |
+|---|---|---|
+| `presets` | lists the presets in `exo_builder/presets/` | |
+| `build CONFIG --model HUMAN.osim -o OUT.osim` | adds the exo described by `CONFIG` (preset name or YAML path) to the human model | `--name` model name, `--info FILE.json` build info (couplings, warnings) |
+| `fit MODEL.osim MOTION.mot -o OUT.mot` | exo coordinates for a human motion (IK result), see [Exo kinematics](#exo-kinematics-from-human-kinematics) | `--step N` use every N-th frame |
+| `forces MODEL.osim MOTION.mot -o OUT.sto` | cuff/belt/binding loads along a motion that has human **and** exo coordinates (e.g. from `fit`) | `--plot FILE.png`, `--no-speeds` ignore damping |
+
+A typical workflow: copy a preset (or
+[full_bilateral.yaml](exo_builder/presets/full_bilateral.yaml), the commented
+template), edit it (see [Describing an exo](#describing-an-exo-yaml)) or tune it in the
+viewer, then `build` → `fit` → `forces`, or use the `.osim` in OpenSim
+(ID/SO/Moco).
+
+### Python
 
 ```python
 import exo_builder                       # first!
@@ -52,6 +128,31 @@ model, info = exo_builder.build_exo("models/subject_walk_contact.osim", "my_exo.
 model.printToXML("human_with_exo.osim")
 print(info["couplings"], info["warnings"])
 ```
+
+`build_exo` accepts a human model (path or `osim.Model`) and a preset name, a YAML
+path or a dict. The other building blocks are
+`exo_builder.kinematics.fit_exo_to_motion` and
+`exo_builder.analysis.coupling_loads` / `coupling_loads_over_motion`.
+
+### Viewer
+
+```bash
+python -m exo_builder.viewer --model models/subject_walk_contact.osim --config full_bilateral
+```
+
+Opens `http://127.0.0.1:8765/` in the browser. Options: `--port`, `--no-browser`. See
+[Viewer](#viewer-1).
+
+### Moco example
+
+```bash
+python examples/moco_track_exo.py --preset hip_bilateral --t0 0.5 --t1 0.8
+```
+
+Options: `--preset` (name or YAML), `--model`, `--motion` (human IK `.mot`, default
+`data/walking/MOCAP-IK/walking1.mot`), `--t0/--t1` (time window, s), `--mesh` (mesh
+interval, s, default 0.05), `--max-iter` (Ipopt, default 500), `--out` (default
+`results/moco_exo`). See [Moco](#moco).
 
 ## Describing an exo (YAML)
 
