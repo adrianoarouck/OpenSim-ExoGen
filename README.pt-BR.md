@@ -23,26 +23,102 @@ data/walking/       marcha: MARKERS (.trc), MOCAP-IK (.mot), FORCE-MOT, SETUP-ID
 legacy/             scripts, modelos, setups e resultados do fluxo antigo (ver legacy/README.md)
 ```
 
-Os comandos abaixo devem ser rodados a partir da raiz do projeto.
+## Instalação
 
-Ambiente alvo: conda `opensim46` (OpenSim 4.6, Python 3.11). Dependências extras:
-`pip install pyyaml pytest` (numpy, scipy e matplotlib já existem no ambiente).
+### Requisitos
 
-> **Regra de ouro:** a primeira importação de qualquer script deve ser
-> `import exo_builder`. No Windows com OpenSim 4.6 ele resolve três conflitos de
-> DLL que derrubam o processo ou o Moco (ver [Problemas de ambiente](#problemas-de-ambiente)).
+| Pacote | Usado em | Testado com |
+|---|---|---|
+| Python | tudo | 3.11 (Windows, conda) e 3.13 (Linux) |
+| Bindings Python do [OpenSim](https://opensim.stanford.edu/) (`opensim`, inclui o Moco) | tudo | 4.6; os testes de contrato da API também passam na 4.5 |
+| numpy | tudo | 2.5.3 |
+| scipy | `fit` (cinemática do exo, `scipy.optimize`) | 1.18.1 |
+| PyYAML | ler/gravar configs do exo | 6.0.3 |
+| matplotlib | só `forces --plot` | 3.11.2 |
+| pytest | rodar os testes | 9.2.0 |
 
-## Uso rápido
+As versões "testado com" são as da última rodada completa dos testes (66 testes, Linux,
+Python 3.13, wheel `opensim` 4.6 do PyPI). No Windows o projeto é desenvolvido num
+ambiente conda com OpenSim 4.6 e Python 3.11. O pacote declara `requires-python >= 3.9`
+e nenhum limite superior; a versão de referência é o OpenSim 4.6.
+
+O visualizador não precisa de pacote Python extra (usa o servidor HTTP da biblioteca
+padrão). A página carrega o [three.js](https://threejs.org/) 0.160.0 da CDN jsdelivr,
+então o navegador precisa de internet.
+
+### Ambiente recomendado: conda
+
+Os bindings Python do OpenSim são distribuídos no canal conda `opensim-org`. É o
+ambiente em que o projeto é desenvolvido:
 
 ```bash
-python -m exo_builder presets
+conda create -n opensim46 python=3.11
+conda activate opensim46
+conda install -c opensim-org opensim=4.6
+
+git clone https://github.com/adrianoarouck/OpenSim-ExoGen.git
+cd OpenSim-ExoGen
+pip install -e ".[test]"                        # exo_builder + scipy, pyyaml, matplotlib, pytest
+```
+
+`pip install -e .` instala o pacote em modo editável e cria o comando `exo-builder`
+(igual a `python -m exo_builder`). Instalar é opcional: todos os comandos abaixo também
+funcionam a partir da raiz do projeto sem isso, desde que as dependências existam.
+
+Conferindo a instalação:
+
+```bash
+python -c "import exo_builder, opensim; print(opensim.GetVersionAndDate())"
+python -m pytest            # ~1-2 min
+```
+
+No Windows, se houver outra instalação do OpenSim no `PATH` do sistema ou o Moco não
+encontrar o Ipopt, veja [Problemas de ambiente](#problemas-de-ambiente).
+
+### Alternativa: só pip (Linux)
+
+Existe também um wheel `opensim` 4.6 no PyPI. É o que as rodadas automáticas de teste
+usam, em Linux x86_64 (Moco incluído):
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install opensim==4.6
+pip install -e ".[test]"
+```
+
+### Regra de ouro
+
+> A primeira importação de qualquer script deve ser `import exo_builder`.
+> No Windows com OpenSim 4.6 ele resolve três conflitos de DLL que derrubam o
+> processo ou o Moco (ver [Problemas de ambiente](#problemas-de-ambiente)).
+
+## Uso
+
+Rode os comandos abaixo a partir da raiz do projeto (os caminhos padrão apontam para
+`models/` e `data/`). `python -m exo_builder` e `exo-builder` são o mesmo comando.
+
+### Linha de comando
+
+```bash
+python -m exo_builder presets                                    # lista os presets
 python -m exo_builder build hip_bilateral --model models/subject_walk_contact.osim -o subject_hip_exo.osim
 python -m exo_builder fit subject_hip_exo.osim data/walking/MOCAP-IK/walking1.mot -o walking1_exo.mot
 python -m exo_builder forces subject_hip_exo.osim walking1_exo.mot -o walking1_cuffs.sto --plot cuffs.png
-python -m exo_builder.viewer --model models/subject_walk_contact.osim --config full_bilateral
 ```
 
-Em Python:
+| Comando | O que faz | Opções |
+|---|---|---|
+| `presets` | lista os presets de `exo_builder/presets/` | |
+| `build CONFIG --model HUMANO.osim -o SAIDA.osim` | adiciona o exo descrito em `CONFIG` (nome de preset ou caminho de YAML) ao modelo humano | `--name` nome do modelo, `--info ARQ.json` info do build (acoplamentos, avisos) |
+| `fit MODELO.osim MOVIMENTO.mot -o SAIDA.mot` | coordenadas do exo para um movimento humano (resultado de IK), ver [Cinemática do exo](#cinemática-do-exo-a-partir-do-humano) | `--step N` usa um quadro a cada N |
+| `forces MODELO.osim MOVIMENTO.mot -o SAIDA.sto` | cargas nos cuffs/cinto/amarração ao longo de um movimento com coordenadas do humano **e** do exo (ex.: saída do `fit`) | `--plot ARQ.png`, `--no-speeds` ignora o amortecimento |
+
+Fluxo típico: copie um preset (ou
+[full_bilateral.yaml](exo_builder/presets/full_bilateral.yaml), o template comentado),
+edite (ver [Descrevendo um exo](#descrevendo-um-exo-yaml)) ou ajuste no visualizador,
+depois `build` → `fit` → `forces`, ou use o `.osim` no OpenSim (ID/SO/Moco).
+
+### Python
 
 ```python
 import exo_builder                       # primeiro!
@@ -51,6 +127,31 @@ model, info = exo_builder.build_exo("models/subject_walk_contact.osim", "my_exo.
 model.printToXML("human_with_exo.osim")
 print(info["couplings"], info["warnings"])
 ```
+
+`build_exo` recebe o modelo humano (caminho ou `osim.Model`) e um nome de preset, um
+caminho de YAML ou um dict. As outras peças são
+`exo_builder.kinematics.fit_exo_to_motion` e
+`exo_builder.analysis.coupling_loads` / `coupling_loads_over_motion`.
+
+### Visualizador
+
+```bash
+python -m exo_builder.viewer --model models/subject_walk_contact.osim --config full_bilateral
+```
+
+Abre `http://127.0.0.1:8765/` no navegador. Opções: `--port`, `--no-browser`. Ver
+[Visualizador](#visualizador-1).
+
+### Exemplo Moco
+
+```bash
+python examples/moco_track_exo.py --preset hip_bilateral --t0 0.5 --t1 0.8
+```
+
+Opções: `--preset` (nome ou YAML), `--model`, `--motion` (`.mot` de IK do humano,
+padrão `data/walking/MOCAP-IK/walking1.mot`), `--t0/--t1` (janela de tempo, s),
+`--mesh` (intervalo da malha, s, padrão 0.05), `--max-iter` (Ipopt, padrão 500),
+`--out` (padrão `results/moco_exo`). Ver [Moco](#moco).
 
 ## Descrevendo um exo (YAML)
 
